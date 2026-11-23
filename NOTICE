@@ -1,0 +1,29 @@
+herdr-tools - third-party notices
+
+1. mods/my-agents, mods/my-changes, mods/my-spaces, mods/tabs-graph
+   Derived from mods bundled with Herdr (agents, changes, spaces, tabs;
+   Herdr 0.1.14-0.1.15), licensed under the Apache License, Version 2.0.
+   A copy of that license: LICENSES/Apache-2.0-Herdr.txt
+   These files were modified. Changes include: grouped/priority agent list,
+   multi-select and multi-file discard in Changes, avatar colors and worktree
+   grouping in Spaces, live terminal titles in the tab bar, and moving pure
+   logic into logic.js for testing. These derived files remain under the
+   Apache License 2.0.
+   mods/my-changes-menu is new code written for my-changes.
+
+2. mods/git-graph-branch
+   Copied and modified from rabeeh-ta/herdr-git-graph (MIT License)
+   https://github.com/rabeeh-ta/herdr-git-graph
+   Original license text: mods/git-graph-branch/LICENSE
+   Changes: branch multi-select ("Branches" segment), "Show only this branch",
+   update check disabled. Some tests in tests/git-graph-branch*.test.js are
+   ported from the original repository's tests.
+
+3. mods/git-graph-branch/icons
+   Most icons are drawn after Lucide (https://lucide.dev), ISC License.
+   See mods/git-graph-branch/icons/LICENSE-lucide.txt.
+
+4. Herdr
+   Herdr itself is not included in this repository. The herdr-notify app
+   icon (Herdr.icns) is copied from a locally installed Herdr.app at build
+   time and is never committed.
