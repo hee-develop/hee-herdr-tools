@@ -1,3 +1,4 @@
+// Modified from Herdr's bundled `spaces` mod (Apache License 2.0); see NOTICE.
 // Workspace spaces: stable colored avatars, worktrees under their checkout,
 // grouped by machine when more than one is known. After a space's name, the repo
 // its first terminal is in now, only where unusual: branch, ahead/behind. Agent state lives in the agents list, not here. Click to
@@ -5,47 +6,20 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
+import { sidebarNarrow, rowHeight, where, glyph, tone, avatarFill, avatarInitial, assignColors, nestWorktrees, planMoves, remoteNames, rebuilt as isRebuilt, gitInfo, gitTailParts } from "./logic.js";
 import { spaces, machines, panes, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout } from "herdr";
 
-function find(node, id) {
-  if (node?.id === id) return node;
-  for (const child of node?.children ?? []) {
-    const found = find(child, id);
-    if (found) return found;
-  }
-  return null;
-}
+// The sidebar's rail goes by its width (see logic.js sidebarNarrow).
+const narrow = () => sidebarNarrow(layout());
 
-// The sidebar's rail goes by its width, not a flag: dragging its edge narrows it too.
-const narrow = () => (find(layout(), "sidebar")?.size?.px ?? Infinity) < 160;
-
-// Where a space is now: its first terminal's live folder, else where it was made.
-// `ps`: panes(), read once by the caller (each read copies every pane).
-function place(s, ps) {
-  const tabs = new Set((s.tabs ?? []).map((c) => c.id));
-  return ps.find((p) => tabs.has(p.tab) && p.cwd)?.cwd || s.folder;
-}
-const rowHeight = ({ tree }) => (tree ? 28 : 30);
 const RAIL_CELL = 32;
 const railCell = (el) => h_flex().flex_none().justify_center().child(el);
-const where = (s, ps) => JSON.stringify([s.machine ?? null, place(s, ps)]);
-const base = (path) => path.replace(/\/+$/, "").split("/").pop();
 // Changes made outside Herdr (an editor's save, a commit in another app): looked
 // for this often, in repos the list shows, while the window is in front.
 const FALLBACK = 60000;
 
-// What a stored color name looks like on an avatar (the same in every mod
-// that draws space avatars): one strong color per hue, light and dark alike.
-const MARK = { ansi6: "#22a99a", ansi3: "#e3814f", ansi4: "#5b8def", ansi5: "#8b7cf6", ansi2: "#3fae6a", ansi1: "#d9649a" };
-
-// A space speaks up only when something in it needs you.
-export function glyph(status) {
-  return status === "blocked" || status === "done" ? "●" : "·";
-}
-
-export function tone(t, status) {
-  return t[status] ?? t.unknown;
-}
+// 공개 export(다른 코드가 main.js에서 가져갈 수 있게 유지): glyph, tone.
+export { glyph, tone };
 
 export default class Spaces extends View {
   init(_props, cx) {
@@ -130,7 +104,7 @@ export default class Spaces extends View {
   }
 
   rebuilt(machine) {
-    return machine?.state === "unreachable" && /^a different core answers there \("[^"]+"\)$/.test(machine.why ?? "");
+    return isRebuilt(machine);
   }
 
   reconnect(machine, cx) {
@@ -213,14 +187,12 @@ export default class Spaces extends View {
         return;
       }
       // The repo's own .git folder names it; a worktree's top differs from it.
-      const top = r.stdout.replace(/\n$/, ""), repo = common.stdout.replace(/\n$/, "");
       const [branch, counts] = await Promise.all([
         exec("git", ["symbolic-ref", "-q", "HEAD"], { cwd, on }),
         exec("git", ["rev-list", "--left-right", "--count", "HEAD...@{upstream}"], { cwd, on }),
       ]);
-      const name = repo.endsWith("/.git") ? base(repo.slice(0, -5)) : base(repo).replace(/\.git$/, "");
-      const [ahead, behind] = counts.code === 0 ? counts.stdout.trim().split(/\s+/).map(Number) : [0, 0];
-      const info = { name, branch: branch.code === 0 ? branch.stdout.trim().replace(/^refs\/heads\//, "") : "(detached)", ahead, behind, repo: JSON.stringify([on, repo]), linked: repo !== `${top}/.git` };
+      const info = gitInfo({ on, top: r.stdout, repo: common.stdout, branchOk: branch.code === 0, branchOut: branch.stdout, countsOk: counts.code === 0, countsOut: counts.stdout });
+      const repo = common.stdout.replace(/\n$/, "");
       this.git[key] = info;
       if (!on) this.watch(repo, cx);
     } catch {
@@ -260,18 +232,7 @@ export default class Spaces extends View {
     const ready = (w) => this.shown.has(w.id) || where(w, ps) in this.git || Date.now() - (this.born[w.id] ??= Date.now()) > 1500;
     for (const w of sp) if (!this.shown.has(w.id) && ready(w)) this.shown.add(w.id);
     const list = sp.map((w, i) => ({ w, i, g: this.git[where(w, ps)] ?? null }));
-    const mains = new Set(list.filter((r) => r.g && !r.g.linked).map((r) => r.g.repo));
-    const nested = (r) => r.g?.linked && mains.has(r.g.repo);
-    const out = [];
-    const placed = new Set(); // repos whose worktrees are listed (under the first of its spaces)
-    for (const r of list) {
-      if (nested(r)) continue;
-      out.push({ ...r, tree: null });
-      if (!r.g || r.g.linked || placed.has(r.g.repo)) continue;
-      placed.add(r.g.repo);
-      const kids = list.filter((k) => nested(k) && k.g.repo === r.g.repo);
-      kids.forEach((k, n) => out.push({ ...k, tree: n === kids.length - 1 ? "└─" : "├─" }));
-    }
+    const out = nestWorktrees(list);
     // Simulate the batch so later indexes include earlier moves. An attempted
     // write can lose a sync conflict: allow the echo to settle before retrying.
     const order = sp.map(w => w.id);
@@ -280,16 +241,10 @@ export default class Spaces extends View {
     if (order.every((id, i) => id === target[i])) {
       this.ordering = null;
     } else if (this.ordering?.key !== key || this.orderingDue(Date.now())) {
-      const moved = new Set();
       this.ordering = { key, at: Date.now(), machines: [] };
-      for (let i = 0; i < out.length; i++) {
-        const from = order.indexOf(out[i].w.id);
-        if (from === i) continue;
-        run("space.move", { id: out[i].w.id, index: i + 1 });
-        moved.add(out[i].w.machine ?? null);
-        order.splice(i, 0, order.splice(from, 1)[0]);
-      }
-      this.ordering.machines = [...moved];
+      const moves = planMoves(order, out);
+      for (const m of moves) run("space.move", { id: m.id, index: m.index });
+      this.ordering.machines = [...new Set(moves.map((m) => m.machine))];
     }
     return out.filter(r => this.shown.has(r.w.id));
   }
@@ -298,7 +253,7 @@ export default class Spaces extends View {
   grouped(t, collapsed) {
     const rows = this.ordered();
     const draw = (r) => (collapsed ? this.compact(r, t) : this.row(r, t));
-    const remote = [...new Set([...rows.map(r => r.w.machine).filter(Boolean), ...this.machines.map(m => m.name), ...Object.keys(this.reconnecting)])].sort();
+    const remote = remoteNames(rows, this.machines, this.reconnecting);
     const loading = m => {
       const layout = machines().find(k => k.name === m)?.layout;
       return layout === "loading" || (!layout && this.machines.some(k => k.name === m && k.state === "connected"))
@@ -366,11 +321,7 @@ export default class Spaces extends View {
   // branch goes when the name already says it (a worktree is named after its branch),
   // and master/main go: nearly every space is on one.
   gitTail(g, tree, name, t) {
-    const raw = g.branch ?? "detached";
-    const same = (a) => a.toLowerCase() === name.toLowerCase();
-    const branch = same(raw) || raw === "master" || raw === "main" ? "" : raw;
-    const repo = tree || same(g.name) ? "" : g.name;
-    const where = [repo, branch].filter(Boolean).join(" \u00b7 ");
+    const { where } = gitTailParts(g, tree, name);
     return h_flex()
       .flex_1()
       .min_w(0)
@@ -389,7 +340,7 @@ export default class Spaces extends View {
     const fromIndex = this.pressed === null ? -1 : spaces().findIndex(s => s.id === this.pressed);
     const colors = shared("space.colors") ?? {};
     const color = colors[w.id] ?? "ansi6";
-    const fill = color.startsWith("#") ? color : (MARK[color] ?? t[color]);
+    const fill = avatarFill(color, t);
     return v_flex()
       .relative()
       .id(`space-${w.id}`)
@@ -435,7 +386,7 @@ export default class Spaces extends View {
           .gap(9)
           .items_center()
           .when(Boolean(tree), el => el.pl(22).child(svg("mods/workspace-chrome/branch.svg").size(13).text_color(t.dim)))
-          .when(!tree, el => el.child(h_flex().size(18).flex_none().rounded(5).bg(fill).items_center().justify_center().text_size(10.5).font_bold().text_color("#ffffff").child([...w.name][0]?.toUpperCase() ?? "?")))
+          .when(!tree, el => el.child(h_flex().size(18).flex_none().rounded(5).bg(fill).items_center().justify_center().text_size(10.5).font_bold().text_color("#ffffff").child(avatarInitial(w.name))))
           // 이름은 앞쪽을 줄인다(…app-mirror-1): 같은 저장소의 worktree는 끝부분이 서로를 구분한다.
           .child(div().flex_shrink(0).max_w(150).truncate().text_ellipsis_start().text_color(t.foreground).child(w.name))
           .child(g ? this.gitTail(g, tree, w.name, t) : div().flex_1()),
@@ -461,17 +412,8 @@ export default class Spaces extends View {
   render() {
     const t = theme();
     const collapsed = narrow();
-    const palette = ["ansi6", "ansi3", "ansi4", "ansi5", "ansi2", "ansi1"];
     const sp = spaces();
-    const ids = new Set(sp.map(p => p.id));
-    const kept = Object.fromEntries(Object.entries(shared("space.colors") ?? {}).filter(([id]) => ids.has(id)));
-    let changed = Object.keys(kept).length !== Object.keys(shared("space.colors") ?? {}).length;
-    for (const p of sp) {
-      if (kept[p.id] || p.name === "~") continue;
-      const uses = c => Object.values(kept).filter(v => v === c).length;
-      kept[p.id] = palette.reduce((best, c) => uses(c) < uses(best) ? c : best);
-      changed = true;
-    }
+    const { kept, changed } = assignColors(sp, shared("space.colors"));
     if (changed) setShared("space.colors", kept);
     return v_flex().size_full().min_h(0).bg(t.chrome).text_size(13)
       .child(h_flex().h(31).pl(16).pr(10).items_center().justify_between().text_size(11.5).text_color(t.dim)

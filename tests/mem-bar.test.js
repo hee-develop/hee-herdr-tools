@@ -1,0 +1,103 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { parseRate, fmtLeft, parseMem, isHot, clampRatio, gaugeWidth, fmtPct, fmtGb, memLabel, pressureLabel, HOT_PERCENT } from "../mods/mem-bar/logic.js";
+
+const NOW = 1_800_000_000; // 초
+
+test("parseRate: 정상 값, 남은 시간 계산", () => {
+  const text = JSON.stringify({
+    five_hour: { used_percentage: 42.5, resets_at: NOW + 3600 },
+    seven_day: { used_percentage: 10, resets_at: NOW + 3 * 86400 },
+    updated_at: NOW - 5,
+  });
+  assert.deepEqual(parseRate(text, NOW), { h5: { pct: 42.5, left: 3600 }, d7: { pct: 10, left: 3 * 86400 } });
+});
+
+test("parseRate: resets_at이 지났거나 같으면 pct·left는 null(\"--\")", () => {
+  const text = JSON.stringify({
+    five_hour: { used_percentage: 99, resets_at: NOW - 1 },
+    seven_day: { used_percentage: 50, resets_at: NOW }, // 경계: <= now 이면 지남
+  });
+  assert.deepEqual(parseRate(text, NOW), { h5: { pct: null, left: null }, d7: { pct: null, left: null } });
+  // 1초 남았으면 아직 유효
+  assert.deepEqual(parseRate(JSON.stringify({ five_hour: { used_percentage: 1, resets_at: NOW + 1 } }), NOW).h5, { pct: 1, left: 1 });
+});
+
+test("parseRate: resets_at 없음/문자열 숫자/잘못된 창", () => {
+  const r = parseRate(JSON.stringify({ five_hour: { used_percentage: 7 }, seven_day: { used_percentage: "x", resets_at: NOW + 60 } }), NOW);
+  assert.deepEqual(r.h5, { pct: 7, left: null });
+  assert.equal(r.d7, null); // used_percentage가 숫자가 아님
+  assert.equal(parseRate(JSON.stringify({ five_hour: { used_percentage: 3, resets_at: String(NOW + 60) } }), NOW).h5.left, 60);
+  assert.equal(parseRate("{}", NOW), null);
+  assert.equal(parseRate(JSON.stringify({ five_hour: null, seven_day: null }), NOW), null);
+  assert.throws(() => parseRate("not json", NOW));
+});
+
+test("fmtLeft: 분/시간/일 경계", () => {
+  assert.equal(fmtLeft(null), "");
+  assert.equal(fmtLeft(undefined), "");
+  assert.equal(fmtLeft(0), "0분");
+  assert.equal(fmtLeft(59), "0분");
+  assert.equal(fmtLeft(42 * 60), "42분");
+  assert.equal(fmtLeft(59 * 60 + 59), "59분");
+  assert.equal(fmtLeft(3600), "1시간");
+  assert.equal(fmtLeft(2 * 3600 + 13 * 60), "2시간 13분");
+  assert.equal(fmtLeft(24 * 3600), "1일");
+  assert.equal(fmtLeft(3 * 86400 + 4 * 3600 + 59 * 60), "3일 4시간");
+  assert.equal(fmtLeft(23 * 3600 + 59 * 60), "23시간 59분");
+});
+
+test("90% 경계: isHot", () => {
+  assert.equal(HOT_PERCENT, 90);
+  assert.equal(isHot(89.99), false);
+  assert.equal(isHot(90), true);
+  assert.equal(isHot(100), true);
+  assert.equal(isHot(0), false);
+});
+
+test("clampRatio / gaugeWidth / fmtPct", () => {
+  assert.equal(clampRatio(-0.5), 0);
+  assert.equal(clampRatio(0.4), 0.4);
+  assert.equal(clampRatio(1.7), 1);
+  assert.equal(gaugeWidth(48, 0.5), 24);
+  assert.equal(gaugeWidth(48, 1), 48);
+  assert.equal(gaugeWidth(48, 0), 0);
+  assert.equal(fmtPct(5), "  5%");
+  assert.equal(fmtPct(89.6), " 90%");
+  assert.equal(fmtPct(100), "100%");
+});
+
+const VM = `Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                               1000.
+Pages purgeable:                          100.
+Pages wired down:                         200.
+Pages occupied by compressor:             300.
+`;
+
+test("parseMem: 사용량 = (internal - purgeable + wired + compressed) * page", () => {
+  const out = `${17179869184}\n16384\n1000\n1\n${VM}`;
+  const m = parseMem(out);
+  assert.equal(m.total, 17179869184);
+  assert.equal(m.used, (1000 - 100 + 200 + 300) * 16384);
+  assert.equal(m.pressure, "normal");
+  assert.equal(parseMem(`1\n1\n0\n2\n`).pressure, "warning");
+  assert.equal(parseMem(`${17179869184}\n16384\n1000\n4\n${VM}`).pressure, "critical");
+  assert.equal(parseMem(`${17179869184}\n16384\n1000\n9\n${VM}`).pressure, "unknown");
+});
+
+test("parseMem: 잘못된 출력은 null", () => {
+  assert.equal(parseMem(""), null);
+  assert.equal(parseMem("0\n16384\n1\n1\n"), null); // total 0
+  assert.equal(parseMem("100\n0\n1\n1\n"), null); // page 0
+  assert.equal(parseMem("abc\n16384\n1\n1\n"), null); // NaN
+});
+
+test("fmtGb / memLabel / pressureLabel", () => {
+  assert.equal(fmtGb(1024 ** 3), " 1.0");
+  assert.equal(fmtGb(12.34 * 1024 ** 3), "12.3");
+  assert.equal(memLabel({ used: 8 * 1024 ** 3, total: 16 * 1024 ** 3 }), "RAM  8.0 / 16.0 GB (50%)");
+  assert.equal(memLabel({ used: 20 * 1024 ** 3, total: 16 * 1024 ** 3 }), "RAM 20.0 / 16.0 GB (100%)"); // 비율은 100%로 제한
+  assert.equal(memLabel({ used: 0, total: 16 * 1024 ** 3 }), "RAM  0.0 / 16.0 GB ( 0%)");
+  assert.equal(pressureLabel("normal"), "Pressure normal  ");
+  assert.equal(pressureLabel("critical"), "Pressure critical");
+});

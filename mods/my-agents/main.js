@@ -1,73 +1,33 @@
+// Modified from Herdr's bundled `agents` mod (Apache License 2.0); see NOTICE.
 // Agents in grouped or priority views; parents take their most urgent sub-agent's place.
 // A viewed done agent stays in Done until left.
 
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
+import { find, sidebarNarrow, leadPanes, kidStatus, duration, trackChanges, nextHeld, rankOf as rankWith, buildTree, nestedAddresses, countByTab, urgencyMap, sortByPriority, topStatus, computeLabels, machineOf, rowName, groupAgents, pendingPinsAfter } from "./logic.js";
 import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout } from "herdr";
 
-function find(node, id) {
-  if (node?.id === id) return node;
-  for (const child of node?.children ?? []) {
-    const found = find(child, id);
-    if (found) return found;
-  }
-  return null;
-}
+// The sidebar's rail goes by its width (see logic.js sidebarNarrow).
+const narrow = () => sidebarNarrow(layout());
 
-// The sidebar's rail goes by its width, not a flag: dragging its edge narrows it too.
-const narrow = () => (find(layout(), "sidebar")?.size?.px ?? Infinity) < 160;
+function findNode(id) {
+  return find(layout(), id);
+}
 
 // To the rail (on macOS wide enough for the traffic lights), or back to the width it had.
 function toggleSidebar() {
-  const width = find(layout(), "sidebar")?.size?.px;
+  const width = findNode("sidebar")?.size?.px;
   if (!narrow()) setShared("sidebar.width", width);
   // Mods edited before the rail went by width still read the flag.
   setShared("sidebar.collapsed", !narrow());
   run("layout.resize", { id: "sidebar", px: narrow() ? (shared("sidebar.width") ?? 268) : window()?.platform === "macos" ? 76 : 44 });
 }
 
-const clean = (s) => (s ?? "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
-
-function leadPanes(all) {
-  const leads = new Map();
-  for (const p of all) {
-    if (!p.terminal) continue;
-    const current = leads.get(p.tab);
-    // First agent, else first focused terminal, else first terminal in the tab.
-    if (!current || (!current.program?.agent && (p.program?.agent || (!current.focused && p.focused)))) leads.set(p.tab, p);
-  }
-  return leads;
-}
-
-function title(tab, l) {
-  const prog = l?.program?.name;
-  const live = clean(l?.title);
-  const telling = live && live !== prog && !/^[~/]|^[A-Za-z]:\\/.test(live) && !live.includes("@") && live.toLowerCase() !== l?.program?.key;
-  return (tab.name === prog || !tab.named) && telling ? live : tab.name;
-}
-const RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
-// A sub-agent without a pane isn't in agents(): its raw word, error counting as
-// blocked. It's never done: it reports to its parent, and the parent's done is the news.
-const kidStatus = (k, listed) => {
-  const s = listed.get(k.address) ?? k.status;
-  return s === "error" ? "blocked" : s === "done" ? "idle" : s;
-};
 const SORTS = [
   { id: "priority", label: "Priority", icon: "clock" },
   { id: "grouped", label: "Grouped by space", icon: "layers" },
 ];
 const sortOf = () => SORTS.find((s) => s.id === shared("agents.sort")) ?? SORTS[0];
-const SECTION = { 4: "Needs you", 3: "Done", 2: "Working", 1: "Idle" };
-const SECTION_STATUS = { 4: "blocked", 3: "done", 2: "working" };
-
-function duration(ms) {
-  const m = Math.floor(ms / 60000);
-  if (m < 1) return "<1m";
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`;
-}
-
 // The agent's icon from the app's program table: a one-color glyph or a picture.
 function icon(p, size, color) {
   if (!p?.icon) return null;
@@ -86,37 +46,22 @@ export default class Agents extends View {
     cx.timer.every(30000, (cx) => cx.notify());
   }
 
-  // Stamps agents whose state changed. Done and idle count as one: looking at a
-  // finished agent turns done into idle, and looking isn't the agent doing anything.
+  // Stamps agents whose state changed (logic.js trackChanges).
   track(list, now) {
-    let dirty = false;
-    for (const a of list) {
-      const s = a.status === "done" ? "idle" : a.status;
-      if (this.changed[a.address]?.s === s) continue;
-      this.changed[a.address] = { s, at: now };
-      dirty = true;
-    }
-    if (!dirty) return;
-    // Gone and old: the list alone is empty right after a start.
-    const listed = new Set(list.map((a) => a.address));
-    for (const [k, c] of Object.entries(this.changed)) if (!listed.has(k) && now - c.at > 30 * 86400000) delete this.changed[k];
+    const r = trackChanges(this.changed, list, now);
+    this.changed = r.changed;
+    if (!r.dirty) return;
     localStorage.setItem("changed", JSON.stringify(this.changed));
   }
 
   // Keep offline pins until their terminal returns, and keep each pending until
   // core echoes the label so a failed write doesn't erase the old pin.
   migratePins(all) {
-    const listed = new Map(all.filter((t) => t.state === "live").map((t) => [t.address, t]));
-    const pending = this.pendingPins.filter((address) => {
-      const terminal = listed.get(address);
-      if (!terminal) return true;
-      if (terminal.labels?.["herdr.pinned"]) return false;
-      if (!this.migratingPins.has(address)) {
-        this.migratingPins.add(address);
-        run("terminal.pin", { terminal: address, pinned: true });
-      }
-      return true;
-    });
+    const { pending, toPin } = pendingPinsAfter(this.pendingPins, all, this.migratingPins);
+    for (const address of toPin) {
+      this.migratingPins.add(address);
+      run("terminal.pin", { terminal: address, pinned: true });
+    }
     if (pending.length === this.pendingPins.length) return;
     this.pendingPins = pending;
     if (pending.length) localStorage.setItem("pins", JSON.stringify(pending));
@@ -127,18 +72,13 @@ export default class Agents extends View {
     return this.changed[a.address]?.at ?? 0;
   }
 
-  // Looking at a done agent makes it idle; it stays with Done until you leave
-  // it rather than drop away under you. Any other change moves it at once.
+  // Looking at a done agent makes it idle; it stays with Done until you leave it.
   hold(list) {
-    const cur = list.find((a) => a.focused);
-    const same = cur && cur.address === this.held?.address;
-    // Arriving, or any change but done turning idle, sets what it was.
-    if (!same || cur.status !== "idle") this.held = cur ? { address: cur.address, rank: RANK[cur.status] ?? 0 } : null;
+    this.held = nextHeld(this.held, list);
   }
 
   rank(a) {
-    const sawDone = a.address === this.held?.address && this.held.rank === RANK.done && a.status === "idle";
-    return sawDone ? RANK.done : RANK[a.status] ?? 0;
+    return rankWith(a, this.held);
   }
 
   sortMenu(t) {
@@ -173,14 +113,7 @@ export default class Agents extends View {
 
   // Live sub-agents of `addr`, depth first, each with the tree lines in front of it.
   tree(all, addr, lead = []) {
-    const kids = all.filter((k) => k.parent === addr && k.state === "live");
-    return kids.flatMap((k, i) => {
-      const last = i === kids.length - 1;
-      return [
-        { t: k, lines: [...lead, last ? "└" : "├"] },
-        ...this.tree(all, k.address, [...lead, last ? "" : "│"]),
-      ];
-    });
+    return buildTree(all, addr, lead);
   }
 
   subRow(t, s, shown, compact) {
@@ -235,14 +168,12 @@ export default class Agents extends View {
     this.hold(list);
     // A kept sub-agent (one with a pane) is in agents() too: where a tree shows
     // it, it gets no row of its own, unless it's pinned.
-    const nested = new Set(collapsed ? [] : list.flatMap((a) => this.tree(all, a.address).map((s) => s.t.address)));
+    const nested = collapsed ? new Set() : nestedAddresses(list, all);
     list = list.filter((a) => a.pinned || !nested.has(a.address));
-    const tabCounts = new Map();
-    for (const a of list) tabCounts.set(a.tab, (tabCounts.get(a.tab) ?? 0) + 1);
+    const tabCounts = countByTab(list);
     const byPriority = sort.id === "priority";
-    const urgency = new Map(list.map((a) => [a.address, Math.max(this.rank(a), ...this.tree(all, a.address).map((s) => RANK[kidStatus(s.t, this.listed)] ?? 0))]));
-    const rankOf = (a) => urgency.get(a.address);
-    if (byPriority) list = [...list].sort((x, y) => rankOf(y) - rankOf(x) || this.since(y) - this.since(x) || y.seq - x.seq);
+    const urgency = urgencyMap(list, all, this.listed, this.held);
+    if (byPriority) list = sortByPriority(list, urgency, (a) => this.since(a));
     const pinned = list.filter((a) => a.pinned);
     const rest = list.filter((a) => !a.pinned);
     list = [...pinned, ...rest];
@@ -257,8 +188,7 @@ export default class Agents extends View {
 
     // The fold chevron; folded, the count too, colored by the most urgent one.
     const fold = (a, subs) => {
-      const sts = subs.map((s) => kidStatus(s.t, this.listed));
-      const top = sts.reduce((m, s) => ((RANK[s] ?? 0) > (RANK[m] ?? 0) ? s : m), null);
+      const top = topStatus(subs.map((s) => kidStatus(s.t, this.listed)));
       const open = !this.folded.has(a.address);
       return div()
         .id(`fold-${a.address}`)
@@ -287,24 +217,14 @@ export default class Agents extends View {
     // Read the pane snapshot once: every host read copies the whole list into JS.
     const leads = leadPanes(panes());
     const tabs = new Map(spaces().flatMap(s => s.tabs).map(tab => [tab.id, tab]));
-    const labels = new Map(list.map(a => {
-      const tab = tabs.get(a.tab);
-      const many = tabCounts.get(a.tab) > 1;
-      return [a.address, tab ? title(many ? { ...tab, named: false } : tab, many ? a : leads.get(a.tab)) : (a.title || a.program?.name || "")];
-    }));
+    const { labels, detail } = computeLabels(list, tabs, leads, tabCounts);
     const label = (a) => labels.get(a.address);
-    const detail = new Map(list.map(a => [a.address, /^\d+$/.test(label(a)) ? null : label(a)]));
-    const seen = {};
-    for (const a of list) { const k = `${a.space_name}\u0000${detail.get(a.address) ?? ""}`; seen[k] = (seen[k] ?? 0) + 1; }
-    for (const a of list) {
-      if (detail.get(a.address) == null && seen[`${a.space_name}\u0000`] > 1) detail.set(a.address, label(a));
-    }
 
     const row = (a, i, subs = []) => {
       const pic = icon(a.program, 16, t.foreground);
       const more = detail.get(a.address);
       // An agent on another machine (`vps/t7`) says which.
-      const machine = a.address.includes("/") ? a.address.split("/")[0] : null;
+      const machine = machineOf(a.address);
       if (collapsed) {
         return h_flex()
           .id(`ag-${a.address}`)
@@ -343,7 +263,7 @@ export default class Agents extends View {
       const full = byPriority || isPinned;
       // 순서 반전: 세션 제목(more)이 앞, space 이름이 뒤 ("detail · space").
       const spaceName = a.space_name || label(a);
-      const name = full ? (more ?? spaceName) : more ?? (/^\d+$/.test(label(a)) ? a.program?.name || label(a) : label(a));
+      const name = rowName({ full, more, spaceName, label: label(a), programName: a.program?.name });
       return h_flex()
         .id(`ag-${a.address}`)
         .px(8)
@@ -383,18 +303,12 @@ export default class Agents extends View {
 
     // Groups in list order: spaces (grouped) or priority sections. Agents of a
     // space are next to each other in agents(), so neighbours make a group.
-    const groups = pinned.length ? [{ id: "pinned", label: "Pinned", status: null, members: pinned }] : [];
-    for (const a of rest) {
-      const r = rankOf(a) || RANK.idle;
-      const id = byPriority ? `sec-${r}` : `sp-${a.space}`;
-      if (groups.at(-1)?.id === id) groups.at(-1).members.push(a);
-      else groups.push({ id, label: byPriority ? SECTION[r] : a.space_name || "", status: byPriority ? SECTION_STATUS[r] : null, members: [a] });
-    }
+    const groups = groupAgents(pinned, rest, urgency, byPriority);
 
     // A group's header; it folds the group. Folded, it says how many and the most urgent state.
     const header = (g) => {
       const open = !this.folded.has(g.id);
-      const top = g.members.reduce((m, a) => ((RANK[a.status] ?? 0) > (RANK[m] ?? 0) ? a.status : m), null);
+      const top = topStatus(g.members.map((a) => a.status));
       return h_flex()
         .id(g.id)
         .px(8)

@@ -4,16 +4,7 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, Scrollbar, v_virtual_list, VirtualListScrollHandle } from "gpui-base";
 import { focused, spaces, panes, exec, notify, theme, props, closeOverlay } from "herdr";
-
-const ROW = 30;
-const MAX_ERROR_LINES = 6;
-
-const PLACEHOLDER = {
-  pick: "Select a branch or tag to checkout",
-  from: "Select a ref to create the branch from",
-  detach: "Select a branch or tag to checkout (detached)",
-  name: "Branch name",
-};
+import { ROW, PLACEHOLDER, parseRefs, buildRows, pickableRows, resolveChoice, createArgs, errorText, wrapIndex, scrollTarget, pickFolder, clampIndex, sanitizeBranchName } from "./logic.js";
 
 async function git(cwd, args, on) {
   const r = await exec("git", args, { cwd, on, timeout: 120_000 });
@@ -25,20 +16,7 @@ async function readRefs(cwd, on) {
   const fmt = "%(refname)%09%(objectname:short=7)%09%(HEAD)%09%(contents:subject)";
   const r = await git(cwd, ["for-each-ref", "--sort=-committerdate", `--format=${fmt}`, "refs/heads", "refs/remotes", "refs/tags"], on);
   if (!r.ok) throw new Error(r.err || "git for-each-ref failed.");
-  const local = [], remote = [], tags = [];
-  for (const line of r.out.split("\n")) {
-    if (!line) continue;
-    const [ref, hash, head, ...rest] = line.split("\t");
-    const subject = rest.join("\t");
-    if (ref.startsWith("refs/heads/")) local.push({ type: "local", name: ref.slice(11), hash, subject, current: head === "*" });
-    else if (ref.startsWith("refs/remotes/")) {
-      const name = ref.slice(13);
-      if (name.endsWith("/HEAD") || !name.includes("/")) continue;
-      remote.push({ type: "remote", name, hash, subject });
-    } else if (ref.startsWith("refs/tags/")) tags.push({ type: "tag", name: ref.slice(10), hash, subject });
-  }
-  local.sort((a, b) => Number(b.current) - Number(a.current)); // stable: current first, rest by date
-  return { local, remote, tags };
+  return parseRefs(r.out);
 }
 
 export default class BranchSwitch extends View {
@@ -74,7 +52,7 @@ export default class BranchSwitch extends View {
     const f = focused();
     const space = spaces().find((s) => s.id === f?.space);
     this.on = space?.machine ?? null;
-    const folder = props()?.folder || f?.cwd || panes().find((p) => (space?.tabs ?? []).some((t) => t.id === p.tab) && p.cwd)?.cwd || space?.folder || null;
+    const folder = pickFolder(props()?.folder, f, space, panes());
     this.folder = folder;
     cx.spawn(async (cx) => {
       try {
@@ -121,65 +99,35 @@ export default class BranchSwitch extends View {
 
   // The rows for the current mode and filter: actions, separators and refs.
   rows() {
-    if (!this.refs) return [];
-    const mode = this.mode();
-    if (mode === "name") return [];
-    const f = this.filter.trim().toLowerCase();
-    const hit = (s) => !f || s.toLowerCase().includes(f);
-    const out = [];
-    if (mode === "pick") {
-      for (const [id, label] of [["new", "+ Create new branch..."], ["from", "+ Create new branch from..."], ["detach", "Checkout detached..."]]) {
-        if (hit(label)) out.push({ kind: "action", id, label });
-      }
-    }
-    const group = (title, list) => {
-      const items = list.filter((r) => hit(r.name));
-      if (items.length) out.push({ kind: "sep", label: title }, ...items.map((r) => ({ kind: "ref", ...r })));
-    };
-    group("branches", this.refs.local);
-    group("remote branches", this.refs.remote);
-    group("tags", this.refs.tags);
-    return out;
+    return buildRows(this.refs, this.mode(), this.filter);
   }
 
   submit(cx) {
     if (this.busy || this.refs === undefined || this.refs === null) return;
     if (this.mode() === "name") return this.create(cx);
     const rows = this.rows();
-    const pickable = rows.filter((r) => r.kind !== "sep");
+    const pickable = pickableRows(rows);
     this.choose(pickable[this.at], cx);
   }
 
   choose(r, cx) {
     if (!r || this.busy) return;
     const mode = this.mode();
-    if (r.kind === "action") {
+    const d = resolveChoice(r, mode, this.refs);
+    if (d.do === "enter") {
       this.base = null;
-      this.enter(r.id === "new" ? "name" : r.id, cx);
-      return;
-    }
-    if (mode === "from") {
+      this.enter(d.mode, cx);
+    } else if (d.do === "base") {
       this.base = r;
       this.enter("name", cx);
-    } else if (mode === "detach") {
-      this.run(["switch", "--detach", r.name], r.name, cx);
-    } else if (r.type === "local") {
-      if (r.current) return this.close();
-      this.run(["switch", r.name], r.name, cx);
-    } else if (r.type === "remote") {
-      const local = r.name.slice(r.name.indexOf("/") + 1);
-      if (this.refs.local.some((l) => l.name === local)) {
-        if (this.refs.local.find((l) => l.name === local).current) return this.close();
-        this.run(["switch", local], local, cx);
-      } else this.run(["switch", "--track", r.name], local, cx);
-    } else this.run(["switch", "--detach", r.name], r.name, cx);
+    } else if (d.do === "close") return this.close();
+    else this.run(d.args, d.label, cx);
   }
 
   create(cx) {
-    const name = this.inputs.name.value().trim().replace(/\s/g, "-");
-    if (!name) return;
-    const args = ["switch", "-c", name, ...(this.base ? [this.base.name] : [])];
-    this.run(args, name, cx);
+    const c = createArgs(this.inputs.name.value(), this.base);
+    if (!c) return;
+    this.run(c.args, c.label, cx);
   }
 
   run(args, label, cx) {
@@ -195,7 +143,7 @@ export default class BranchSwitch extends View {
         notify({ title: `Switched to ${label}`, level: "success" });
         this.close();
       } else {
-        this.error = r.err.split("\n").slice(0, MAX_ERROR_LINES).join("\n") || "git switch failed.";
+        this.error = errorText(r.err);
       }
       cx.notify();
     });
@@ -203,21 +151,20 @@ export default class BranchSwitch extends View {
 
   move(delta, count, rows) {
     if (!count) return;
-    this.at = (this.at + delta + count) % count;
+    this.at = wrapIndex(this.at, delta, count);
     // Keep the selection on screen: the list reports which rows it drew.
-    const pickable = rows.filter((r) => r.kind !== "sep");
+    const pickable = pickableRows(rows);
     const idx = rows.indexOf(pickable[this.at]);
-    const visible = Math.max(1, this.range.end - this.range.start - 1);
-    if (idx <= this.range.start) this.scrollH.scroll_to_item(this.at === 0 ? 0 : Math.max(0, idx - 1));
-    else if (idx >= this.range.end - 1) this.scrollH.scroll_to_item(Math.max(0, idx - visible + 1));
+    const target = scrollTarget(this.at, idx, this.range);
+    if (target !== null) this.scrollH.scroll_to_item(target);
   }
 
   render(cx) {
     const t = theme();
     const mode = this.mode();
     const rows = this.rows();
-    const pickable = rows.filter((r) => r.kind !== "sep");
-    this.at = Math.max(0, Math.min(this.at, pickable.length - 1));
+    const pickable = pickableRows(rows);
+    this.at = clampIndex(this.at, pickable.length);
     const sel = pickable[this.at];
     const hint = {
       pick: "↑↓ choose · ↵ checkout · esc close",
@@ -244,7 +191,7 @@ export default class BranchSwitch extends View {
     else if (this.refs === null) {
       body = div().p(10).text_color(t.muted).child(this.fatal || "Not a git repository");
     } else if (mode === "name") {
-      const name = this.filter.trim().replace(/\s/g, "-");
+      const name = sanitizeBranchName(this.filter);
       body = div().p(10).text_color(t.muted).child(name ? `Press Enter to create branch "${name}" from ${this.base ? this.base.name : "HEAD"}` : "Please provide a new branch name");
     } else {
       body = v_flex().relative().flex_none().w_full().h(Math.max(ROW, Math.min(rows.length * ROW, 360)))

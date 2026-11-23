@@ -1,15 +1,8 @@
+// Modified from Herdr's bundled `tabs` mod (Apache License 2.0); see NOTICE.
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
+import { find, tabProgram, tabLabel, tabText, lightsPadding, panelIsOn } from "./logic.js";
 import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings } from "herdr";
-
-function find(node, id) {
-  if (node?.id === id) return node;
-  for (const child of node?.children ?? []) {
-    const found = find(child, id);
-    if (found) return found;
-  }
-  return null;
-}
 
 export default class Tabs extends View {
   init() {
@@ -53,13 +46,9 @@ export default class Tabs extends View {
     const button = (id, label, action) => div().id(id).size(26).flex_none().flex().items_center().justify_center().rounded(6).text_color(t.dim).hover(s => s.bg(t.hover).text_color(t.foreground))
       .on_mouse_down("left", stop).on_click(action).child(label);
     const item = (c, i) => {
-      const program = panes().find(p => p.tab === c.id && p.program?.agent)?.program ?? panes().find(p => p.tab === c.id)?.program;
-      // 이름 없는 탭은 에이전트가 보고한 제목(Claude Code의 세션 이름)을 보여 준다.
-      // 경로·user@host·프로그램 이름 같은 제목은 건너뛰고, 직접 이름 붙인 탭은 그대로 둔다.
-      const lead = panes().find(p => p.tab === c.id && p.program?.agent) ?? panes().find(p => p.tab === c.id && p.focused);
-      const live = (lead?.title ?? "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
-      const telling = live && live !== lead?.program?.name && live.toLowerCase() !== lead?.program?.key && !/^[~/]|^[A-Za-z]:\\/.test(live) && !live.includes("@");
-      const name = !c.named && telling ? live : /^tb\d+$/.test(c.name) ? program?.name ?? "Terminal" : c.name;
+      const ps = panes();
+      const program = tabProgram(c, ps);
+      const name = tabLabel(c, ps);
       return h_flex().id(`tab-${c.id}`).h(29).px(10).gap(7).rounded(7).items_center().flex_none().text_size(12.8)
         .border(1).border_color(c.active ? t.border : t.chrome).bg(c.active ? t.raised : t.chrome).text_color(c.active ? t.foreground : t.muted)
         .hover(s => s.bg(t.hover))
@@ -71,21 +60,18 @@ export default class Tabs extends View {
         })
         .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); openOverlay({ mod: "menu", kind: "popup", width: 200, props: { tab: "tab", target: { id: c.id, space: space.id } } }); })
         .when(Boolean(program?.icon), el => el.child(program.tint ? svg(program.icon).size(14).text_color(t.muted) : image(program.icon).size(14)))
-        .child(div().max_w(170).truncate().child(c.zoomed ? `${name} Z` : name))
+        .child(div().max_w(170).truncate().child(tabText(c, name)))
         .when(c.status === "working", el => el.child(svg("mods/workspace-chrome/spinner.svg").size(12).flex_none().text_color(t.working).spin(900)))
         .when(c.status === "blocked" || c.status === "done", el => el.child(div().size(6).rounded(3).bg(t[c.status])))
         .when(c.active, el => el.child(div().id(`close-${c.id}`).text_color(t.dim).on_mouse_down("left", stop).on_click((_e, cx) => { cx.stop_propagation(); run("tab.close", { id: c.id }); }).child(svg("mods/pane/close.svg").size(12))));
     };
-    const root = layout(), sidebar = find(root, "sidebar"), w = window();
-    // Old saved rails and a dragged-narrow sidebar can be smaller than the window buttons.
-    const lightsPadding = w?.platform === "macos" && w.titlebar === "none" && !w.fullscreen && root?.traffic_lights
-      ? Math.max(10, (root.traffic_lights[0] + 64) / settings().zoom - (sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
-      : 10;
+    const root = layout(), w = window();
+    const lightsPad = lightsPadding(root, w, settings().zoom);
     const panel = find(root, "panel"), body = find(root, "panel-body");
     const enabled = [...(shared("workspace.panels") ?? ["files", "changes"]), "graph"];
     this.syncPanel(space, panel, body, enabled);
     const panelButton = (id, label, icon) => {
-      const on = panel && !panel.hidden && body?.active === id;
+      const on = panelIsOn(panel, body, id);
       return h_flex().id(`panel-${id}`).h(26).px(8).gap(5).flex_none().items_center().rounded(6)
         .text_size(12).bg(on ? t.selected : t.chrome).text_color(on ? t.foreground : t.muted)
         .hover(s => s.bg(t.hover)).on_mouse_down("left", stop)
@@ -94,7 +80,7 @@ export default class Tabs extends View {
           else { run("layout.select", { stack: "panel-body", child: id }); run("layout.show", { id: "panel" }); }
         }).child(svg(icon).size(14)).child(label);
     };
-    return h_flex().size_full().min_w(0).px(10).pl(lightsPadding).gap(3).items_center().bg(t.chrome).border_b(1).border_color(t.border)
+    return h_flex().size_full().min_w(0).px(10).pl(lightsPad).gap(3).items_center().bg(t.chrome).border_b(1).border_color(t.border)
       .on_mouse_up("left", () => { this.pressed = null; })
       .on_scroll_wheel(e => { if (Math.abs(e.delta.y) >= 1) run(e.delta.y > 0 ? "tab.prev" : "tab.next"); })
       .child(h_flex().id("tab-scroll").flex_1().min_w(0).h_full().items_center().gap(3).overflow_x_scrollbar().children(shown.map(item)))

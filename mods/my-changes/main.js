@@ -1,5 +1,7 @@
+// Modified from Herdr's bundled `changes` mod (Apache License 2.0); see NOTICE.
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, Scrollbar, v_virtual_list } from "gpui-base";
+import { countLines, diffRows, parseNumstat, parseChanges, pruneSelection, selectionAfterClick, menuTarget, requestItems, discardArgs, discardNote } from "./logic.js";
 import { spaces, panes, focused, exec, readTextFile, watchFolder, theme, settings, openOverlay, shared, setShared } from "herdr";
 
 function location() {
@@ -12,24 +14,6 @@ const key = () => JSON.stringify(location());
 // Reads write nothing under .git (no index refresh or lock, no fsmonitor cookie):
 // the folder watch would see it, and every refresh would start the next one.
 const READ = ["--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "diff.autoRefreshIndex=false"];
-const countLines = (text) => text ? text.split("\n").length - Number(text.endsWith("\n")) : 0;
-
-// Text draws a tab as nothing: pad each to the next 4-column stop.
-const untab = (text) => text.replace(/[^\t]*\t/g, (s) => s.slice(0, -1).padEnd((s.length - 1) - (s.length - 1) % 4 + 4));
-
-// Numbers each diff line once, so a frame only draws the rows on screen.
-function diffRows(lines) {
-  let old = 0, next = 0;
-  return lines.map((line) => {
-    const match = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
-    if (match) { old = +match[1]; next = +match[2]; return { kind: "@", text: line }; }
-    const kind = line[0];
-    if (kind === "-") return { kind, number: old++, text: untab(line.slice(1)) || " " };
-    if (kind === "+") return { kind, number: next++, text: untab(line.slice(1)) || " " };
-    if (kind === " ") { old++; return { kind, number: next++, text: untab(line.slice(1)) || " " }; }
-    return { kind: "", text: line };
-  });
-}
 
 export default class Changes extends View {
   init(_props, cx) {
@@ -81,28 +65,11 @@ export default class Changes extends View {
         const status = await git(["status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all"]);
         if (status.code !== 0) throw new Error(status.stderr);
         const head = await git(["rev-parse", "--verify", "HEAD"]);
-        const stats = {};
         const results = head.code === 0 ? [await git(["diff", "HEAD", "--numstat", "-z", "--no-renames"])] : [await git(["diff", "--cached", "--numstat", "-z", "--no-renames"]), await git(["diff", "--numstat", "-z", "--no-renames"])];
-        for (const result of results) {
-          if (result.code !== 0) throw new Error(result.stderr);
-          for (const entry of result.stdout.split("\0")) {
-            const [a, d, ...parts] = entry.split("\t");
-            if (!parts.length) continue;
-            const path = parts.join("\t"), old = stats[path] ?? { add: 0, del: 0 };
-            stats[path] = { add: old.add + (Number(a) || 0), del: old.del + (Number(d) || 0), binary: a === "-" };
-          }
-        }
-        const files = [];
-        const entries = status.stdout.split("\0").filter(Boolean);
-        for (const entry of entries.slice(0, 1000)) {
-          const xy = entry.slice(0, 2), path = entry.slice(3), fresh = xy === "??";
-          const conflict = xy.includes("U") || xy === "AA" || xy === "DD";
-          const s = conflict ? "U" : xy.includes("D") ? "D" : fresh || xy.includes("A") ? "A" : "M";
-          const stat = stats[path] ?? { add: 0, del: 0 };
-          files.push({ path, status: s, fresh, ...stat });
-        }
+        for (const result of results) if (result.code !== 0) throw new Error(result.stderr);
+        const { files, limited } = parseChanges(status.stdout, parseNumstat(results.map((r) => r.stdout)));
         if (key() !== context) return;
-        this.root = root; this.on = on; this.hasHead = head.code === 0; this.files = files; this.limited = entries.length > 1000; this.error = null;
+        this.root = root; this.on = on; this.hasHead = head.code === 0; this.files = files; this.limited = limited; this.error = null;
         this.pruneSelection();
         this.watch(root, cx);
         if (this.open && !files.some((f) => f.path === this.open)) { this.open = null; this.setLines([]); }
@@ -155,40 +122,26 @@ export default class Changes extends View {
     cx.notify();
   }
 
-  // Drops selected paths that no longer have changes.
   pruneSelection() {
-    const paths = new Set(this.files.map((f) => f.path));
-    for (const p of [...this.selected]) if (!paths.has(p)) this.selected.delete(p);
-    if (this.anchor && !paths.has(this.anchor)) this.anchor = null;
+    ({ selected: this.selected, anchor: this.anchor } = pruneSelection(this.files, this.selected, this.anchor));
   }
 
   // Plain click: select only this row and toggle its diff (as before).
   // Cmd+click: toggle this row. Shift+click: range from the anchor (cmd+shift adds to the selection).
   // Cmd/shift clicks leave the open diff alone.
   click(path, m, cx) {
-    if (m.shift) {
-      const from = this.files.findIndex((f) => f.path === this.anchor), to = this.files.findIndex((f) => f.path === path);
-      if (from < 0) { this.selected = new Set([path]); this.anchor = path; }
-      else {
-        const range = this.files.slice(Math.min(from, to), Math.max(from, to) + 1).map((f) => f.path);
-        this.selected = new Set([...(m.platform ? this.selected : []), ...range]);
-      }
-    } else if (m.platform) {
-      if (this.selected.has(path)) this.selected.delete(path); else this.selected.add(path);
-      this.anchor = path;
-    } else {
-      this.selected = new Set([path]); this.anchor = path;
-      this.pick(path, cx);
-      return;
-    }
+    const r = selectionAfterClick(this.files, this.selected, this.anchor, path, m);
+    this.selected = r.selected; this.anchor = r.anchor;
+    if (r.pick) { this.pick(path, cx); return; }
     cx.notify();
   }
 
   // Right-click: a row inside the selection acts on the whole selection; any other row becomes the selection.
   menu(file, cx) {
-    if (!this.selected.has(file.path)) { this.selected = new Set([file.path]); this.anchor = file.path; cx.notify(); }
-    const items = this.files.filter((f) => this.selected.has(f.path)).map((f) => ({ path: f.path, status: f.status, fresh: f.fresh }));
-    openOverlay({ mod: "my-changes-menu", kind: "popup", width: 160, height: 60, props: { mode: "menu", items } });
+    const r = menuTarget(this.files, this.selected, this.anchor, file);
+    this.selected = r.selected; this.anchor = r.anchor;
+    if (r.changed) cx.notify();
+    openOverlay({ mod: "my-changes-menu", kind: "popup", width: 160, height: 60, props: { mode: "menu", items: r.items } });
   }
 
   commit(cx) {
@@ -210,16 +163,9 @@ export default class Changes extends View {
 
   // Discard one file. Every command is scoped to `file.path` (after `--`, literal pathspec).
   async discardFile(file, root, on) {
-    const path = file.path, git = (args) => exec("git", ["--literal-pathspecs", ...args], { cwd: root, on });
-    let args;
-    if (file.fresh) args = ["clean", "-f", "--", path];
-    else if (!this.hasHead) {
-      if (file.status !== "A" && file.status !== "D") throw new Error("no HEAD to restore from");
-      args = ["rm", "-f", "--", path];
-    } else {
-      const inHead = (await git(["cat-file", "-e", `HEAD:${path}`])).code === 0;
-      args = inHead ? ["restore", "--source=HEAD", "--staged", "--worktree", "--", path] : ["rm", "-f", "--", path];
-    }
+    const git = (args) => exec("git", ["--literal-pathspecs", ...args], { cwd: root, on });
+    const inHead = file.fresh || !this.hasHead ? false : (await git(["cat-file", "-e", `HEAD:${file.path}`])).code === 0;
+    const args = discardArgs(file, this.hasHead, inHead);
     const r = await git(args);
     if (r.code !== 0) throw new Error((r.stderr || r.stdout).trim());
   }
@@ -228,7 +174,7 @@ export default class Changes extends View {
   // Best effort: conflicts and failures are skipped and reported; the rest still run, one at a time.
   // Each file's state is looked up again here, not taken from the dialog.
   discard(req, cx) {
-    const items = Array.isArray(req.items) ? req.items : req.path ? [req] : [];
+    const items = requestItems(req);
     if (!items.length) return;
     if (!this.root || this.context !== key()) return;
     if (this.busy || this.loading) { this.note = "Discard skipped: the panel was busy, try again"; cx.notify(); return; }
@@ -249,13 +195,7 @@ export default class Changes extends View {
       } finally {
         if (key() === context) {
           for (const p of done) this.selected.delete(p);
-          if (!failed.length) this.note = null;
-          else if (items.length === 1) this.note = `Discard failed: ${failed[0].reason}`;
-          else {
-            const cut = (r) => (r.length > 60 ? r.slice(0, 60) + "…" : r);
-            const shown = failed.slice(0, 3).map((x) => `${x.path} (${cut(x.reason)})`).join(", ");
-            this.note = `${failed.length}개 실패: ${shown}${failed.length > 3 ? ` 외 ${failed.length - 3}개` : ""}`;
-          }
+          this.note = discardNote(failed, items.length);
         }
         this.busy = false; this.refresh(cx); cx.notify();
       }
