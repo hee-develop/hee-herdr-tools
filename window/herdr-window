@@ -1,0 +1,12 @@
+#!/bin/sh
+# 두 번째 Herdr 창을 연다. 기존 창과 완전히 분리된다.
+#   설정 홈: ~/.config/herdr-app-2
+#   코어 세션: window2 (space·탭·터미널이 기본 세션과 따로 관리됨)
+#
+# Claude Code 세션 안에서 실행해도 그 세션의 환경변수(CLAUDE_CODE_CHILD_SESSION 등)가
+# 새 창의 터미널로 새지 않도록 CLAUDE*·ANTHROPIC* 변수를 지우고 띄운다.
+for v in $(env | sed -n 's/^\(CLAUDE[A-Z_]*\)=.*/\1/p; s/^\(ANTHROPIC[A-Z_]*\)=.*/\1/p'); do
+  unset "$v"
+done
+HC_SESSION=window2 HERDR_APP_HOME="$HOME/.config/herdr-app-2" \
+  nohup /Applications/Herdr.app/Contents/MacOS/Herdr >/dev/null 2>&1 &

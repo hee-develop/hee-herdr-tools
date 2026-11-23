@@ -1,0 +1,8 @@
+# herdr가 mod 폴더에 다시 쓰는 타입 파일
+gpui-kit.d.ts
+herdr.d.ts
+jsconfig.json
+# 빌드 산출물
+/build/
+node_modules/
+.DS_Store
