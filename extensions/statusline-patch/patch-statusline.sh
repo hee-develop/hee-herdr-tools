@@ -20,7 +20,7 @@ for a in "$@"; do
     --dry-run) MODE=dry ;;
     --check) MODE=check ;;
     -h|--help)
-      echo "사용법: sh scripts/patch-statusline.sh [--dry-run|--check]"
+      echo "사용법: sh extensions/statusline-patch/patch-statusline.sh [--dry-run|--check]"
       echo "  (없음)     상태줄 스크립트에 account 기록을 적용 (적용 전 백업)"
       echo "  --dry-run  바뀔 diff만 출력하고 파일은 바꾸지 않음"
       echo "  --check    이미 적용돼 있으면 0, 패치가 필요하면 1, 알 수 없는 내용이면 2"

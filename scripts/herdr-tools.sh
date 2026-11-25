@@ -113,15 +113,15 @@ cmd_status() {
   say "대상: $ROOT"
   for m in $(repo_mods); do status_dir "$REPO/mods/$m" "$MAIN/mods/$m" "mods/$m"; done
   status_file "$REPO/layouts/main-window/my-main.json" "$MAIN/layouts/my-main.json" "layouts/main-window/my-main.json"
-  status_file "$REPO/window/herdr-window" "$BIN/herdr-window" "window/herdr-window"
+  status_file "$REPO/extensions/herdr-window/herdr-window" "$BIN/herdr-window" "extensions/herdr-window/herdr-window"
   if [ -d "$HOME2" ]; then
     status_file "$REPO/layouts/second-window/my-main.json" "$HOME2/layouts/my-main.json" "layouts/second-window/my-main.json"
     for m in $(second_mods); do status_link "$HOME2/mods/$m" "$MAIN/mods/$m"; done
   else
     say "  (두 번째 홈 없음: 건너뜀)"
   fi
-  status_file "$REPO/notify/src/main.swift" "$NOTIFY/src/main.swift" "notify/src/main.swift"
-  status_file "$REPO/notify/Info.plist" "$NOTIFY/herdr-notify.app/Contents/Info.plist" "notify/Info.plist"
+  status_file "$REPO/extensions/notify-helper/src/main.swift" "$NOTIFY/src/main.swift" "extensions/notify-helper/src/main.swift"
+  status_file "$REPO/extensions/notify-helper/Info.plist" "$NOTIFY/herdr-notify.app/Contents/Info.plist" "extensions/notify-helper/Info.plist"
   [ -d "$NOTIFY/herdr-notify.app" ] || report "[없음] herdr-notify.app (설치 안 됨)"
   if [ "$DIFFS" = 0 ]; then say "차이 없음"; return 0; fi
   say "차이 있음"; return 1
@@ -165,7 +165,7 @@ cmd_install() {
   say "layouts (메인)"
   copy_file "$REPO/layouts/main-window/my-main.json" "$MAIN/layouts/my-main.json" "main-home/layouts/my-main.json"
   say "herdr-window"
-  copy_file "$REPO/window/herdr-window" "$BIN/herdr-window" "bin/herdr-window" 755
+  copy_file "$REPO/extensions/herdr-window/herdr-window" "$BIN/herdr-window" "bin/herdr-window" 755
   if [ "$DRY" != 1 ] && [ -f "$BIN/herdr-window" ]; then chmod 755 "$BIN/herdr-window"; fi
   if [ -d "$HOME2" ]; then
     say "두 번째 홈"
@@ -177,16 +177,16 @@ cmd_install() {
   if [ "$SKIP_NOTIFY" = 1 ]; then
     say "notify: 건너뜀 (--skip-notify)"
   elif [ "$DRY" = 1 ]; then
-    say "notify: [dry-run] build-notify.sh 빌드 후 $NOTIFY/herdr-notify.app 로 설치 예정"
+    say "notify: [dry-run] notify-helper/build.sh 빌드 후 $NOTIFY/herdr-notify.app 로 설치 예정"
   else
     say "notify"
     OUT=$REPO/build
-    sh "$SCRIPT_DIR/build-notify.sh" "$OUT"
+    sh "$REPO/extensions/notify-helper/build.sh" "$OUT"
     backup_path "$NOTIFY/herdr-notify.app" "notify/herdr-notify.app"
     mkdir -p "$NOTIFY/src"
     if [ -d "$NOTIFY/herdr-notify.app" ]; then rm -r "${NOTIFY:?}/herdr-notify.app"; fi
     cp -R "$OUT/herdr-notify.app" "$NOTIFY/herdr-notify.app"
-    cp "$REPO/notify/src/main.swift" "$NOTIFY/src/main.swift"
+    cp "$REPO/extensions/notify-helper/src/main.swift" "$NOTIFY/src/main.swift"
     say "  설치: $NOTIFY/herdr-notify.app"
   fi
   if [ -d "$BACKUP" ]; then say "백업 생성됨: $BACKUP"; else say "백업할 변경 없음"; fi
@@ -222,12 +222,12 @@ cmd_capture() {
     out=$(rsync $FLAG --delete $RSYNC_EX --exclude=/LICENSE "$MAIN/mods/$m/" "$REPO/mods/$m/" | grep -E '^(>f(c|\+)|\*deleting)' || true)
     if [ -n "$out" ]; then echo "$out" | sed 's/^/  /'; fi
   done
-  say "layouts / window / notify"
+  say "layouts / extensions"
   cap_file "$MAIN/layouts/my-main.json" "$REPO/layouts/main-window/my-main.json"
   cap_file "$HOME2/layouts/my-main.json" "$REPO/layouts/second-window/my-main.json"
-  cap_file "$BIN/herdr-window" "$REPO/window/herdr-window"
-  cap_file "$NOTIFY/src/main.swift" "$REPO/notify/src/main.swift"
-  cap_file "$NOTIFY/herdr-notify.app/Contents/Info.plist" "$REPO/notify/Info.plist"
+  cap_file "$BIN/herdr-window" "$REPO/extensions/herdr-window/herdr-window"
+  cap_file "$NOTIFY/src/main.swift" "$REPO/extensions/notify-helper/src/main.swift"
+  cap_file "$NOTIFY/herdr-notify.app/Contents/Info.plist" "$REPO/extensions/notify-helper/Info.plist"
   say "완료. git diff로 확인 후 커밋하세요."
 }
 

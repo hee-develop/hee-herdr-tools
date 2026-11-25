@@ -18,9 +18,11 @@ Herdr용 개인 커스텀(mod, 레이아웃, 두 번째 창 실행 스크립트,
 | `mods/system-notify` | 에이전트가 사용자 입력 대기/완료 상태가 되었는데 Herdr 창이 비활성이면 macOS 알림을 띄웁니다. 화면에는 아무것도 그리지 않습니다. |
 | `layouts/main-window/my-main.json` | 메인 창 레이아웃. |
 | `layouts/second-window/my-main.json` | 두 번째 창 레이아웃(`system-notify` 블록 제외). |
-| `window/herdr-window` | 두 번째 Herdr 창을 띄우는 스크립트. |
-| `notify/` | 알림 헬퍼 앱(`herdr-notify.app`)의 Swift 소스와 `Info.plist`. |
-| `scripts/` | 설치·동기화·점검 스크립트와 상태줄 패치 스크립트. |
+| `extensions/herdr-window` | 두 번째 Herdr 창을 띄우는 스크립트. |
+| `extensions/notify-helper` | 알림 헬퍼 앱(`herdr-notify.app`)의 Swift 소스, `Info.plist`, 빌드 스크립트(`build.sh`). |
+| `extensions/statusline-patch` | Claude Code 상태줄 스크립트 패치(`patch-statusline.sh`). |
+| `scripts/` | 설치·동기화 스크립트. |
+| `dev/` | 개발용 점검 스크립트(`check-all.sh`, `scan-private.sh`). |
 | `tests/` | mod 로직 단위 테스트. |
 
 ## 사용법
@@ -47,9 +49,9 @@ sh scripts/herdr-tools.sh capture                # herdr 홈 -> 저장소 (라�
 mem-bar는 Claude Code 상태줄 스크립트가 남기는 캐시(`~/.claude/state/rate-limits.json`)를 읽습니다. 우클릭 메뉴의 계정 표시는 상태줄 스크립트가 이 캐시에 `account`를 함께 기록해야 동작합니다. 상태줄 스크립트는 저장소 밖(`~/.claude`)에 있으므로, 이 저장소의 스크립트로 한 번 패치합니다. 패치하지 않으면 메뉴에 "계정 정보 없음"이 표시됩니다.
 
 ```sh
-sh scripts/patch-statusline.sh --check     # 이미 적용돼 있으면 0, 패치가 필요하면 1, 알 수 없는 내용이면 2
-sh scripts/patch-statusline.sh --dry-run   # 바뀔 diff만 출력 (파일은 그대로)
-sh scripts/patch-statusline.sh             # 적용 (적용 전 ~/.local/state/herdr-tools/backup/<타임스탬프>/ 에 백업)
+sh extensions/statusline-patch/patch-statusline.sh --check     # 이미 적용돼 있으면 0, 패치가 필요하면 1, 알 수 없는 내용이면 2
+sh extensions/statusline-patch/patch-statusline.sh --dry-run   # 바뀔 diff만 출력 (파일은 그대로)
+sh extensions/statusline-patch/patch-statusline.sh             # 적용 (적용 전 ~/.local/state/herdr-tools/backup/<타임스탬프>/ 에 백업)
 ```
 
 - 이미 적용돼 있으면 아무것도 하지 않고, 상태줄 스크립트의 해당 블록이 예상과 다르면 추측해서 고치지 않고 종료코드 2로 멈춥니다.
@@ -60,13 +62,13 @@ sh scripts/patch-statusline.sh             # 적용 (적용 전 ~/.local/state/h
 
 ```sh
 npm test          # node --test "tests/**/*.test.js"
-npm run check     # scripts/check-all.sh: mods/* 각각에 herdr-app check 실행
-sh scripts/scan-private.sh   # 공개 전 개인정보(절대경로, 이메일, 토큰 패턴) 점검
+npm run check     # dev/check-all.sh: mods/* 각각에 herdr-app check 실행
+sh dev/scan-private.sh   # 공개 전 개인정보(절대경로, 이메일, 토큰 패턴) 점검
 ```
 
 ## 두 번째 창 구조
 
-`window/herdr-window`는 `HC_SESSION=window2`와 `HERDR_APP_HOME=~/.config/herdr-app-2`를 주어 코어까지 분리된 두 번째 창을 띄웁니다. 두 창은 space·탭·터미널이 서로 보이지 않습니다.
+`extensions/herdr-window/herdr-window`는 `HC_SESSION=window2`와 `HERDR_APP_HOME=~/.config/herdr-app-2`를 주어 코어까지 분리된 두 번째 창을 띄웁니다. 두 창은 space·탭·터미널이 서로 보이지 않습니다.
 
 `install`은 두 번째 홈(`~/.config/herdr-app-2`)이 있으면 다음을 맞춥니다.
 
@@ -78,10 +80,10 @@ sh scripts/scan-private.sh   # 공개 전 개인정보(절대경로, 이메일, 
 ## 알림 헬퍼 빌드
 
 ```sh
-sh scripts/build-notify.sh [out_dir]   # 기본 build/
+sh extensions/notify-helper/build.sh [out_dir]   # 기본 build/
 ```
 
-`notify/src/main.swift`를 `swiftc`로 빌드하고 `Info.plist`를 넣어 `herdr-notify.app`을 만든 뒤 ad-hoc 서명합니다. `Herdr.icns`는 빌드 시점에 `/Applications/Herdr.app`에서 복사하며 저장소에는 포함하지 않습니다(없으면 경고만 하고 아이콘 없이 빌드). `install`은 이 스크립트를 호출해 `~/.local/share/herdr-notify/`에 설치합니다.
+`extensions/notify-helper/src/main.swift`를 `swiftc`로 빌드하고 `Info.plist`를 넣어 `herdr-notify.app`을 만든 뒤 ad-hoc 서명합니다. `Herdr.icns`는 빌드 시점에 `/Applications/Herdr.app`에서 복사하며 저장소에는 포함하지 않습니다(없으면 경고만 하고 아이콘 없이 빌드). `install`은 이 스크립트를 호출해 `~/.local/share/herdr-notify/`에 설치합니다.
 
 ## 서드파티 고지
 

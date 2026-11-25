@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "..", "scripts", "patch-statusline.sh");
+const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "..", "extensions", "statusline-patch", "patch-statusline.sh");
 const hasJq = spawnSync("jq", ["--version"]).status === 0;
 
 // 패치 전 상태줄 스크립트의 캐시 기록 블록만 담은 최소 픽스처.
