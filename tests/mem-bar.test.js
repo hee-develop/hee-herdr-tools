@@ -10,7 +10,7 @@ test("parseRate: 정상 값, 남은 시간 계산", () => {
     seven_day: { used_percentage: 10, resets_at: NOW + 3 * 86400 },
     updated_at: NOW - 5,
   });
-  assert.deepEqual(parseRate(text, NOW), { h5: { pct: 42.5, left: 3600 }, d7: { pct: 10, left: 3 * 86400 } });
+  assert.deepEqual(parseRate(text, NOW), { h5: { pct: 42.5, left: 3600 }, d7: { pct: 10, left: 3 * 86400 }, updatedAt: NOW - 5, account: null });
 });
 
 test("parseRate: resets_at이 지났거나 같으면 pct·left는 null(\"--\")", () => {
@@ -18,7 +18,8 @@ test("parseRate: resets_at이 지났거나 같으면 pct·left는 null(\"--\")",
     five_hour: { used_percentage: 99, resets_at: NOW - 1 },
     seven_day: { used_percentage: 50, resets_at: NOW }, // 경계: <= now 이면 지남
   });
-  assert.deepEqual(parseRate(text, NOW), { h5: { pct: null, left: null }, d7: { pct: null, left: null } });
+  const r = parseRate(text, NOW);
+  assert.deepEqual([r.h5, r.d7], [{ pct: null, left: null }, { pct: null, left: null }]);
   // 1초 남았으면 아직 유효
   assert.deepEqual(parseRate(JSON.stringify({ five_hour: { used_percentage: 1, resets_at: NOW + 1 } }), NOW).h5, { pct: 1, left: 1 });
 });
@@ -33,18 +34,18 @@ test("parseRate: resets_at 없음/문자열 숫자/잘못된 창", () => {
   assert.throws(() => parseRate("not json", NOW));
 });
 
-test("fmtLeft: 분/시간/일 경계", () => {
+test("fmtLeft: 영어 한 글자 단위(m/h/d) 경계", () => {
   assert.equal(fmtLeft(null), "");
   assert.equal(fmtLeft(undefined), "");
-  assert.equal(fmtLeft(0), "0분");
-  assert.equal(fmtLeft(59), "0분");
-  assert.equal(fmtLeft(42 * 60), "42분");
-  assert.equal(fmtLeft(59 * 60 + 59), "59분");
-  assert.equal(fmtLeft(3600), "1시간");
-  assert.equal(fmtLeft(2 * 3600 + 13 * 60), "2시간 13분");
-  assert.equal(fmtLeft(24 * 3600), "1일");
-  assert.equal(fmtLeft(3 * 86400 + 4 * 3600 + 59 * 60), "3일 4시간");
-  assert.equal(fmtLeft(23 * 3600 + 59 * 60), "23시간 59분");
+  assert.equal(fmtLeft(0), "0m");
+  assert.equal(fmtLeft(59), "0m");
+  assert.equal(fmtLeft(42 * 60), "42m");
+  assert.equal(fmtLeft(59 * 60 + 59), "59m");
+  assert.equal(fmtLeft(3600), "1h");
+  assert.equal(fmtLeft(2 * 3600 + 40 * 60), "2h 40m");
+  assert.equal(fmtLeft(24 * 3600), "1d");
+  assert.equal(fmtLeft(5 * 86400 + 7 * 3600 + 59 * 60), "5d 7h");
+  assert.equal(fmtLeft(23 * 3600 + 59 * 60), "23h 59m");
 });
 
 test("90% 경계: isHot", () => {
@@ -62,8 +63,8 @@ test("clampRatio / gaugeWidth / fmtPct", () => {
   assert.equal(gaugeWidth(48, 0.5), 24);
   assert.equal(gaugeWidth(48, 1), 48);
   assert.equal(gaugeWidth(48, 0), 0);
-  assert.equal(fmtPct(5), "  5%");
-  assert.equal(fmtPct(89.6), " 90%");
+  assert.equal(fmtPct(5), "5%"); // 앞쪽 공백으로 폭을 맞추지 않는다
+  assert.equal(fmtPct(89.6), "90%");
   assert.equal(fmtPct(100), "100%");
 });
 

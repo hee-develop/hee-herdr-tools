@@ -15,18 +15,18 @@ export function parseRate(text, nowSec) {
     if (resets && resets <= nowSec) return { pct: null, left: null };
     return { pct: w.used_percentage, left: resets ? resets - nowSec : null };
   };
-  const r = { h5: one(j.five_hour), d7: one(j.seven_day) };
+  const r = { h5: one(j.five_hour), d7: one(j.seven_day), updatedAt: Number(j.updated_at) || null, account: typeof j.account === "string" && j.account ? j.account : null };
   return r.h5 || r.d7 ? r : null;
 }
 
-// 42분 · 2시간 13분 · 3일 4시간
+// 42m · 2h 40m · 5d 7h (한 글자 단위)
 export function fmtLeft(sec) {
   if (sec == null) return "";
   const m = Math.floor(sec / 60);
-  if (m < 60) return `${m}분`;
+  if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
-  if (h < 24) return m % 60 ? `${h}시간 ${m % 60}분` : `${h}시간`;
-  return h % 24 ? `${Math.floor(h / 24)}일 ${h % 24}시간` : `${Math.floor(h / 24)}일`;
+  if (h < 24) return m % 60 ? `${h}h ${m % 60}m` : `${h}h`;
+  return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${Math.floor(h / 24)}d`;
 }
 
 export const isHot = (pct) => pct >= HOT_PERCENT;
@@ -34,8 +34,8 @@ export const isHot = (pct) => pct >= HOT_PERCENT;
 export const clampRatio = (x) => Math.min(1, Math.max(0, x));
 // 게이지 채움 너비(px).
 export const gaugeWidth = (full, ratio) => Math.round(full * ratio);
-// 고정폭 "%": "  5%", " 90%", "100%".
-export const fmtPct = (pct) => `${String(Math.round(pct)).padStart(3)}%`;
+// "5%", "90%", "100%". 앞쪽 공백으로 폭을 맞추지 않는다(좌우 여백이 달라 보임).
+export const fmtPct = (pct) => `${Math.round(pct)}%`;
 // 고정폭 GB 필드.
 export const fmtGb = (bytes) => (bytes / 1024 ** 3).toFixed(1).padStart(4);
 
