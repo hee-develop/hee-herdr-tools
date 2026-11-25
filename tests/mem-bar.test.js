@@ -34,6 +34,26 @@ test("parseRate: resets_at 없음/문자열 숫자/잘못된 창", () => {
   assert.throws(() => parseRate("not json", NOW));
 });
 
+test("parseRate: updatedAt(캐시 갱신 시각, 초)", () => {
+  const w = { five_hour: { used_percentage: 1, resets_at: NOW + 60 } };
+  assert.equal(parseRate(JSON.stringify({ ...w, updated_at: 1500 }), NOW).updatedAt, 1500);
+  assert.equal(parseRate(JSON.stringify(w), NOW).updatedAt, null); // 없음
+  assert.equal(parseRate(JSON.stringify({ ...w, updated_at: 0 }), NOW).updatedAt, null);
+  assert.equal(parseRate(JSON.stringify({ ...w, updated_at: "x" }), NOW).updatedAt, null);
+});
+
+test("parseRate: account는 비어 있지 않은 문자열만 통과, 나머지는 null", () => {
+  const w = { five_hour: { used_percentage: 1, resets_at: NOW + 60 } };
+  const account = (v) => parseRate(JSON.stringify({ ...w, account: v }), NOW).account;
+  assert.equal(account("person-a"), "person-a");
+  assert.equal(account(""), null);
+  assert.equal(account(5), null);
+  assert.equal(account(null), null);
+  assert.equal(parseRate(JSON.stringify(w), NOW).account, null); // 필드 없음
+  // account가 있어도 창 값은 그대로
+  assert.deepEqual(parseRate(JSON.stringify({ ...w, account: "person-a" }), NOW).h5, { pct: 1, left: 60 });
+});
+
 test("fmtLeft: 영어 한 글자 단위(m/h/d) 경계", () => {
   assert.equal(fmtLeft(null), "");
   assert.equal(fmtLeft(undefined), "");
