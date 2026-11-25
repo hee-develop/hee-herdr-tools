@@ -9,7 +9,7 @@ herdr-tools - third-party notices
    grouping in Spaces, live terminal titles in the tab bar, and moving pure
    logic into logic.js for testing. These derived files remain under the
    Apache License 2.0.
-   mods/my-changes-menu is new code written for git-changes.
+   mods/git-changes/menu.js (the Discard menu) is new code written for git-changes.
 
 2. mods/git-graph-branch
    Copied and modified from rabeeh-ta/herdr-git-graph (MIT License)

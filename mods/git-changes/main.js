@@ -2,7 +2,8 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, Scrollbar, v_virtual_list } from "gpui-base";
 import { countLines, diffRows, parseNumstat, parseChanges, pruneSelection, selectionAfterClick, menuTarget, requestItems, discardArgs, discardNote } from "./logic.js";
-import { spaces, panes, focused, exec, readTextFile, watchFolder, theme, settings, openOverlay, shared, setShared } from "herdr";
+import { spaces, panes, focused, exec, readTextFile, watchFolder, theme, settings, openOverlay, shared, setShared, props } from "herdr";
+import { renderMenu } from "./menu.js";
 
 function location() {
   const space = spaces().find((s) => s.active), f = focused();
@@ -15,9 +16,12 @@ const key = () => JSON.stringify(location());
 // the folder watch would see it, and every refresh would start the next one.
 const READ = ["--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "diff.autoRefreshIndex=false"];
 
+// An instance opened with props { mode: "menu" | "confirm" } is the Discard popup or dialog (menu.js); without props it is the panel.
 export default class Changes extends View {
   init(_props, cx) {
-    this.files = []; this.rows = []; this.diffWidth = 0; this.message = ""; this.handle = cx.focus_handle();
+    this.handle = cx.focus_handle();
+    if (props()?.mode) { this.handle.focus(); return; }
+    this.files = []; this.rows = []; this.diffWidth = 0; this.message = "";
     // Multi-select: paths (not indexes), so a refresh can't shift the selection onto other files.
     this.selected = new Set(); this.anchor = null;
     this.input = InputState.new({ placeholder: "Commit message" });
@@ -141,7 +145,7 @@ export default class Changes extends View {
     const r = menuTarget(this.files, this.selected, this.anchor, file);
     this.selected = r.selected; this.anchor = r.anchor;
     if (r.changed) cx.notify();
-    openOverlay({ mod: "my-changes-menu", kind: "popup", width: 160, height: 60, props: { mode: "menu", items: r.items } });
+    openOverlay({ mod: "git-changes", kind: "popup", width: 160, height: 60, props: { mode: "menu", items: r.items } });
   }
 
   commit(cx) {
@@ -211,8 +215,9 @@ export default class Changes extends View {
   }
 
   render(cx) {
+    if (props()?.mode) return renderMenu(this.handle);
     if (key() !== this.context) this.refresh(cx);
-    // A confirmed Discard arrives from the my-changes-menu overlay through shared state.
+    // A confirmed Discard arrives from the menu's confirmation dialog (this mod with props { mode }) through shared state.
     const req = shared("git-changes.discard");
     if (req && req.nonce !== this.discardNonce) { this.discardNonce = req.nonce; setShared("git-changes.discard", null); this.discard(req, cx); }
     const t = theme(), add = this.files.reduce((n, f) => n + f.add, 0), del = this.files.reduce((n, f) => n + f.del, 0);

@@ -7,14 +7,12 @@ Herdr용 개인 커스텀(mod, 레이아웃, 두 번째 창 실행 스크립트,
 | 경로 | 설명 |
 | --- | --- |
 | `mods/hee-agent-list` | 에이전트를 그룹/우선순위 뷰로 보여 주는 사이드바. 하위 에이전트 중 가장 급한 상태가 부모 자리를 차지합니다. (herdr `agents` 복제) |
-| `mods/git-changes` | Git 변경 파일 목록과 diff 패널. 다중 선택과 discard 요청을 처리합니다. (herdr `changes` 복제) |
-| `mods/my-changes-menu` | Changes 행의 우클릭 메뉴와 Discard 확인 창. |
+| `mods/git-changes` | Git 변경 파일 목록과 diff 패널. 다중 선택과 discard 요청을 처리하며, 행 우클릭 메뉴와 Discard 확인 창(`menu.js`)도 이 mod가 같은 이름으로 다시 열어 그립니다. (herdr `changes` 복제) |
 | `mods/hee-space-list` | space 목록. 고정 색 아바타, worktree 묶음, 머신별 그룹, 브랜치·ahead/behind 표시. (herdr `spaces` 복제) |
 | `mods/tabs-graph` | 탭 바. 에이전트 터미널 제목 추적과 윈도우 버튼을 포함합니다. (herdr `tabs` 복제) |
 | `mods/branch-switch` | VS Code "Checkout to..."와 같은 브랜치/태그 전환 퀵 픽. 로컬 ref만 사용합니다. |
 | `mods/git-graph-branch` | Git 그래프 패널. 브랜치 다중 선택과 "Show only this branch"를 추가한 복제본(아래 서드파티 고지 참고). |
-| `mods/mem-bar` | 메모리 사용량(활동 모니터의 "사용된 메모리" 방식)과 Claude Code 사용 한도 게이지. 사용량 영역을 우클릭하면 새로고침 메뉴가 뜹니다. |
-| `mods/mem-bar-menu` | mem-bar 사용량 영역의 우클릭 팝업. 사용량이 어느 계정의 값인지, 캐시를 마지막으로 갱신한 뒤 경과 시간, 새로고침 항목을 보여 줍니다. |
+| `mods/mem-bar` | 메모리 사용량(활동 모니터의 "사용된 메모리" 방식)과 Claude Code 사용 한도 게이지. 사용량 영역을 우클릭하면 계정, 캐시 갱신 후 경과 시간, 새로고침 항목이 있는 메뉴(`menu.js`)가 뜹니다. |
 | `mods/system-notify` | 에이전트가 사용자 입력 대기/완료 상태가 되었는데 Herdr 창이 비활성이면 macOS 알림을 띄웁니다. 화면에는 아무것도 그리지 않습니다. |
 | `layouts/main-window/my-main.json` | 메인 창 레이아웃. |
 | `layouts/second-window/my-main.json` | 두 번째 창 레이아웃(`system-notify` 블록 제외). |
