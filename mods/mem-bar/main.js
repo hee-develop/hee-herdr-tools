@@ -1,6 +1,6 @@
 import { View, div } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { theme, exec, settings, readTextFile, home } from "herdr";
+import { theme, exec, settings, readTextFile, home, openOverlay, shared, setShared } from "herdr";
 import { parseRate, fmtLeft, parseMem, isHot, clampRatio, gaugeWidth, fmtPct, memLabel, pressureLabel } from "./logic.js";
 
 // macOS memory, computed like Activity Monitor's "Memory Used":
@@ -20,6 +20,7 @@ export default class MemBar extends View {
   init(_props, cx) {
     this.mem = null;
     this.rate = null;
+    this.refreshNonce = null;
     this.refresh(cx);
     cx.timer.every(5000, (cx) => this.refresh(cx));
   }
@@ -41,7 +42,10 @@ export default class MemBar extends View {
     });
   }
 
-  render() {
+  render(cx) {
+    // A "새로고침" click in the mem-bar-menu popup arrives through shared state.
+    const req = shared("mem-bar.refresh");
+    if (req && req.nonce !== this.refreshNonce) { this.refreshNonce = req.nonce; setShared("mem-bar.refresh", null); this.refresh(cx); }
     const t = theme();
     const m = this.mem;
     let bar = h_flex().size_full().px(14).gap(10).items_center().justify_end().bg(t.chrome).font_family(settings().font_family ?? "JetBrains Mono").text_size(11.5).text_color(t.muted);
@@ -54,7 +58,8 @@ export default class MemBar extends View {
     // Divider + extra gap: Claude usage is a different group from machine memory.
     const item = (label, w) => {
       const pct = w?.pct;
-      const row = h_flex().gap(3).items_center().child(div().text_color(t.dim).child(label));
+      // gap(6) between gauge, percent and time keeps both sides of the percent equal; label gets mr(4) → 10px (about one character) before the gauge.
+      const row = h_flex().gap(6).items_center().child(div().mr(4).text_color(t.dim).child(label));
       if (pct == null) return row.child(div().child("--"));
       const ratio = clampRatio(pct / 100);
       const hot = isHot(pct);
@@ -64,8 +69,14 @@ export default class MemBar extends View {
         .child(div().text_color(hot ? BLUE.hot : t.muted).child(fmtPct(pct)))
         .child(div().text_color(t.dim).child(fmtLeft(w.left)));
     };
-    // Wider gap between the two windows than inside one, so "36m" reads as 5h's, not 주간's.
-    bar = bar.child(h_flex().gap(10).items_center().child(item("5시간", r.h5)).child(div().text_color(t.dim).child("·")).child(item("주간", r.d7)));
+    // Left to right: 주간, 5시간. Wider gap between windows than inside one, so each remaining time reads as its own window's.
+    // Right-click on the usage group opens the refresh menu; stop_propagation because the bar block is a window_drag.
+    bar = bar.child(h_flex().id("rate-usage").gap(10).items_center()
+      .on_mouse_down("right", (_e, cx) => {
+        cx.stop_propagation();
+        openOverlay({ mod: "mem-bar-menu", kind: "popup", at: "pointer", width: 220, height: 60, props: { updatedAt: this.rate?.updatedAt ?? null, account: this.rate?.account ?? null } });
+      })
+      .child(item("주간", r.d7)).child(div().text_color(t.dim).child("·")).child(item("5시간", r.h5)));
     return beforeMem ? bar.child(div().w(1).h(14).mx(4).bg(t.border)) : bar;
   }
 
