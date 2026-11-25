@@ -1,4 +1,4 @@
-# herdr-tools
+# hee-herdr-tools
 
 Herdr용 개인 커스텀(mod, 레이아웃, 두 번째 창 실행 스크립트, 알림 헬퍼)을 형상관리하는 저장소입니다. 이 저장소가 원본이고, 설치 스크립트가 herdr 홈으로 **복사**합니다(심볼릭 링크 아님).
 
@@ -28,17 +28,17 @@ Herdr용 개인 커스텀(mod, 레이아웃, 두 번째 창 실행 스크립트,
 macOS와 `rsync`, `herdr-app` 명령이 필요합니다. 알림 헬퍼를 빌드하려면 `swiftc`(Xcode Command Line Tools)와 `/Applications/Herdr.app`이 필요합니다.
 
 ```sh
-sh scripts/herdr-tools.sh status                 # 저장소 vs 설치본 차이 (차이 있으면 종료코드 1)
-sh scripts/herdr-tools.sh install --dry-run      # 무엇이 바뀌는지 미리 보기
-sh scripts/herdr-tools.sh install                # 저장소 -> herdr 홈 복사
-sh scripts/herdr-tools.sh install --skip-notify  # 알림 헬퍼 빌드·설치 건너뛰기
-sh scripts/herdr-tools.sh capture                # herdr 홈 -> 저장소 (라이브로 고친 내용 가져오기)
+sh scripts/hee-herdr-tools.sh status                 # 저장소 vs 설치본 차이 (차이 있으면 종료코드 1)
+sh scripts/hee-herdr-tools.sh install --dry-run      # 무엇이 바뀌는지 미리 보기
+sh scripts/hee-herdr-tools.sh install                # 저장소 -> herdr 홈 복사
+sh scripts/hee-herdr-tools.sh install --skip-notify  # 알림 헬퍼 빌드·설치 건너뛰기
+sh scripts/hee-herdr-tools.sh capture                # herdr 홈 -> 저장소 (라이브로 고친 내용 가져오기)
 ```
 
-- `install`은 덮어쓰거나 지우기 전에 기존 파일을 `~/.local/state/herdr-tools/backup/<타임스탬프>/`에 백업합니다.
+- `install`은 덮어쓰거나 지우기 전에 기존 파일을 `~/.local/state/hee-herdr-tools/backup/<타임스탬프>/`에 백업합니다.
 - mod는 폴더 단위로 맞추되, herdr가 시작할 때마다 다시 쓰는 `gpui-kit.d.ts`, `herdr.d.ts`, `jsconfig.json`은 비교·삭제 대상에서 제외합니다.
 - `capture`는 저장소에 커밋되지 않은 변경이 있으면 경고하고 중단합니다(`--force`로 진행). 저장소 전용 파일(`mods/git-graph-branch/LICENSE`)은 지우지 않습니다.
-- 모든 경로는 `$HOME` 기준이며, 테스트용으로 `HERDR_TOOLS_HOME=<임시 루트>`로 대상 루트를 바꿀 수 있습니다. 실제 홈을 건드리지 않고 시험하려면 가짜 홈을 만들어 이 변수로 실행하세요.
+- 모든 경로는 `$HOME` 기준이며, 테스트용으로 `HEE_HERDR_TOOLS_HOME=<임시 루트>`로 대상 루트를 바꿀 수 있습니다. 실제 홈을 건드리지 않고 시험하려면 가짜 홈을 만들어 이 변수로 실행하세요.
 
 설치 후 herdr를 재시작해야 mod 변경이 반영됩니다.
 
@@ -49,12 +49,12 @@ mem-bar는 Claude Code 상태줄 스크립트가 남기는 캐시(`~/.claude/sta
 ```sh
 sh extensions/statusline-patch/patch-statusline.sh --check     # 이미 적용돼 있으면 0, 패치가 필요하면 1, 알 수 없는 내용이면 2
 sh extensions/statusline-patch/patch-statusline.sh --dry-run   # 바뀔 diff만 출력 (파일은 그대로)
-sh extensions/statusline-patch/patch-statusline.sh             # 적용 (적용 전 ~/.local/state/herdr-tools/backup/<타임스탬프>/ 에 백업)
+sh extensions/statusline-patch/patch-statusline.sh             # 적용 (적용 전 ~/.local/state/hee-herdr-tools/backup/<타임스탬프>/ 에 백업)
 ```
 
 - 이미 적용돼 있으면 아무것도 하지 않고, 상태줄 스크립트의 해당 블록이 예상과 다르면 추측해서 고치지 않고 종료코드 2로 멈춥니다.
 - 두 번째 계정을 `CLAUDE_CONFIG_DIR`로 쓰는 경우 상태줄은 그 폴더의 `.claude.json`에서 계정을 읽고, 변수가 없으면 `$HOME/.claude.json`을 읽습니다. 읽지 못하면 `account`는 null입니다.
-- 대상 경로는 `HERDR_TOOLS_HOME`을 따릅니다.
+- 대상 경로는 `HEE_HERDR_TOOLS_HOME`을 따릅니다.
 
 ## 테스트
 

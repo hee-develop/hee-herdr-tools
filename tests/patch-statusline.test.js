@@ -34,11 +34,11 @@ function fixture(content = ORIGINAL) {
 }
 
 function run(home, ...args) {
-  return spawnSync("sh", [SCRIPT, ...args], { env: { ...process.env, HERDR_TOOLS_HOME: home }, encoding: "utf8" });
+  return spawnSync("sh", [SCRIPT, ...args], { env: { ...process.env, HEE_HERDR_TOOLS_HOME: home }, encoding: "utf8" });
 }
 
 function backups(home) {
-  const root = join(home, ".local", "state", "herdr-tools", "backup");
+  const root = join(home, ".local", "state", "hee-herdr-tools", "backup");
   try {
     return readdirSync(root).map((d) => join(root, d, "statusline-command.sh"));
   } catch {

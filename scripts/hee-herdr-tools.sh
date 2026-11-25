@@ -1,24 +1,24 @@
 #!/bin/sh
-# herdr-tools: 저장소(원본) <-> herdr 홈 설치·동기화.
+# hee-herdr-tools: 저장소(원본) <-> herdr 홈 설치·동기화.
 #   status | install [--dry-run] [--skip-notify] | capture [--dry-run] [--force]
-# 대상 루트는 HERDR_TOOLS_HOME(기본 $HOME)으로 바꿀 수 있다.
+# 대상 루트는 HEE_HERDR_TOOLS_HOME(기본 $HOME)으로 바꿀 수 있다.
 set -eu
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$SCRIPT_DIR/.." && pwd)
-ROOT=${HERDR_TOOLS_HOME:-$HOME}
+ROOT=${HEE_HERDR_TOOLS_HOME:-$HOME}
 MAIN=$ROOT/.config/herdr-app
 HOME2=$ROOT/.config/herdr-app-2
 BIN=$ROOT/.local/bin
 NOTIFY=$ROOT/.local/share/herdr-notify
-BACKUP_ROOT=$ROOT/.local/state/herdr-tools/backup
+BACKUP_ROOT=$ROOT/.local/state/hee-herdr-tools/backup
 # 두 번째 홈에서 제외하는 mod (알림은 메인 창에서만)
 SECOND_SKIP="system-notify"
 # 저장소에 없지만 두 번째 홈에 링크해 두는 서드파티 mod (메인 홈에 있을 때만)
 SECOND_EXTRA="git-graph"
 
 # herdr가 mod 폴더에 다시 쓰는 파일 (비교·삭제 대상 제외)
-RSYNC_EX="--exclude=gpui-kit.d.ts --exclude=herdr.d.ts --exclude=jsconfig.json --exclude=.DS_Store"
+RSYNC_EX="--exclude=README.md --exclude=gpui-kit.d.ts --exclude=herdr.d.ts --exclude=jsconfig.json --exclude=.DS_Store"
 
 STAMP=$(date +%Y%m%d-%H%M%S)
 BACKUP=$BACKUP_ROOT/$STAMP
@@ -30,11 +30,11 @@ repo_mods() { ls "$REPO/mods"; }
 
 usage() {
   cat <<USAGE
-사용법: sh scripts/herdr-tools.sh <status|install|capture> [옵션]
+사용법: sh scripts/hee-herdr-tools.sh <status|install|capture> [옵션]
   status                                저장소와 설치본의 차이 표시 (차이 있으면 종료코드 1)
   install [--dry-run] [--skip-notify]   저장소 -> 홈 복사 (덮어쓰기 전 백업)
   capture [--dry-run] [--force]         홈 -> 저장소 역복사 (저장소가 깨끗해야 함)
-환경변수: HERDR_TOOLS_HOME (기본 \$HOME)
+환경변수: HEE_HERDR_TOOLS_HOME (기본 \$HOME)
 USAGE
 }
 
