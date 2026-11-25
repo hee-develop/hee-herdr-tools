@@ -13,13 +13,14 @@ Herdr용 개인 커스텀(mod, 레이아웃, 두 번째 창 실행 스크립트,
 | `mods/tabs-graph` | 탭 바. 에이전트 터미널 제목 추적과 윈도우 버튼을 포함합니다. (herdr `tabs` 복제) |
 | `mods/branch-switch` | VS Code "Checkout to..."와 같은 브랜치/태그 전환 퀵 픽. 로컬 ref만 사용합니다. |
 | `mods/git-graph-branch` | Git 그래프 패널. 브랜치 다중 선택과 "Show only this branch"를 추가한 복제본(아래 서드파티 고지 참고). |
-| `mods/mem-bar` | 메모리 사용량(활동 모니터의 "사용된 메모리" 방식)과 Claude Code 사용 한도 게이지. |
+| `mods/mem-bar` | 메모리 사용량(활동 모니터의 "사용된 메모리" 방식)과 Claude Code 사용 한도 게이지. 사용량 영역을 우클릭하면 새로고침 메뉴가 뜹니다. |
+| `mods/mem-bar-menu` | mem-bar 사용량 영역의 우클릭 팝업. 사용량이 어느 계정의 값인지, 캐시를 마지막으로 갱신한 뒤 경과 시간, 새로고침 항목을 보여 줍니다. |
 | `mods/system-notify` | 에이전트가 사용자 입력 대기/완료 상태가 되었는데 Herdr 창이 비활성이면 macOS 알림을 띄웁니다. 화면에는 아무것도 그리지 않습니다. |
 | `layouts/main-window/my-main.json` | 메인 창 레이아웃. |
 | `layouts/second-window/my-main.json` | 두 번째 창 레이아웃(`system-notify` 블록 제외). |
 | `window/herdr-window` | 두 번째 Herdr 창을 띄우는 스크립트. |
 | `notify/` | 알림 헬퍼 앱(`herdr-notify.app`)의 Swift 소스와 `Info.plist`. |
-| `scripts/` | 설치·동기화·점검 스크립트. |
+| `scripts/` | 설치·동기화·점검 스크립트와 상태줄 패치 스크립트. |
 | `tests/` | mod 로직 단위 테스트. |
 
 ## 사용법
@@ -40,6 +41,20 @@ sh scripts/herdr-tools.sh capture                # herdr 홈 -> 저장소 (라�
 - 모든 경로는 `$HOME` 기준이며, 테스트용으로 `HERDR_TOOLS_HOME=<임시 루트>`로 대상 루트를 바꿀 수 있습니다. 실제 홈을 건드리지 않고 시험하려면 가짜 홈을 만들어 이 변수로 실행하세요.
 
 설치 후 herdr를 재시작해야 mod 변경이 반영됩니다.
+
+### mem-bar 계정 표시와 상태줄 패치
+
+mem-bar는 Claude Code 상태줄 스크립트가 남기는 캐시(`~/.claude/state/rate-limits.json`)를 읽습니다. 우클릭 메뉴의 계정 표시는 상태줄 스크립트가 이 캐시에 `account`를 함께 기록해야 동작합니다. 상태줄 스크립트는 저장소 밖(`~/.claude`)에 있으므로, 이 저장소의 스크립트로 한 번 패치합니다. 패치하지 않으면 메뉴에 "계정 정보 없음"이 표시됩니다.
+
+```sh
+sh scripts/patch-statusline.sh --check     # 이미 적용돼 있으면 0, 패치가 필요하면 1, 알 수 없는 내용이면 2
+sh scripts/patch-statusline.sh --dry-run   # 바뀔 diff만 출력 (파일은 그대로)
+sh scripts/patch-statusline.sh             # 적용 (적용 전 ~/.local/state/herdr-tools/backup/<타임스탬프>/ 에 백업)
+```
+
+- 이미 적용돼 있으면 아무것도 하지 않고, 상태줄 스크립트의 해당 블록이 예상과 다르면 추측해서 고치지 않고 종료코드 2로 멈춥니다.
+- 두 번째 계정을 `CLAUDE_CONFIG_DIR`로 쓰는 경우 상태줄은 그 폴더의 `.claude.json`에서 계정을 읽고, 변수가 없으면 `$HOME/.claude.json`을 읽습니다. 읽지 못하면 `account`는 null입니다.
+- 대상 경로는 `HERDR_TOOLS_HOME`을 따릅니다.
 
 ## 테스트
 
