@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   countLines, untab, diffRows, parseNumstat, parseChanges, pruneSelection, selectionAfterClick,
   menuTarget, requestItems, discardArgs, discardNote,
-} from "../mods/my-changes/logic.js";
+} from "../mods/git-changes/logic.js";
 
 const mk = (...paths) => paths.map((path) => ({ path, status: "M", fresh: false }));
 const files = mk("a", "b", "c", "d", "e");

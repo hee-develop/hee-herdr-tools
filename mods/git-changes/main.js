@@ -213,8 +213,8 @@ export default class Changes extends View {
   render(cx) {
     if (key() !== this.context) this.refresh(cx);
     // A confirmed Discard arrives from the my-changes-menu overlay through shared state.
-    const req = shared("my-changes.discard");
-    if (req && req.nonce !== this.discardNonce) { this.discardNonce = req.nonce; setShared("my-changes.discard", null); this.discard(req, cx); }
+    const req = shared("git-changes.discard");
+    if (req && req.nonce !== this.discardNonce) { this.discardNonce = req.nonce; setShared("git-changes.discard", null); this.discard(req, cx); }
     const t = theme(), add = this.files.reduce((n, f) => n + f.add, 0), del = this.files.reduce((n, f) => n + f.del, 0);
     const enabled = Boolean(this.message.trim() && this.root && !this.busy && !this.loading);
     return v_flex().id("changes").size_full().min_h(0).rounded(10).overflow_hidden().bg(t.background).border_1().border_color(t.border).text_color(t.foreground).text_size(13).track_focus(this.handle)

@@ -1,5 +1,5 @@
 // Modified from Herdr's bundled `spaces` mod (Apache License 2.0); see NOTICE.
-// my-spaces의 순수 로직: 위치 키, worktree 중첩 정렬, 이동 계획, 색 배정, git 정보 파싱.
+// hee-space-list의 순수 로직: 위치 키, worktree 중첩 정렬, 이동 계획, 색 배정, git 정보 파싱.
 // herdr·gpui 의존 없음. herdr API 결과(spaces(), panes(), machines(), layout())를 인자로 받는다.
 
 export function find(node, id) {

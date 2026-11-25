@@ -1,5 +1,5 @@
 // Modified from Herdr's bundled `agents` mod (Apache License 2.0); see NOTICE.
-// my-agents의 순수 로직. herdr·gpui를 import하지 않으므로 node에서 그대로 테스트할 수 있다.
+// hee-agent-list의 순수 로직. herdr·gpui를 import하지 않으므로 node에서 그대로 테스트할 수 있다.
 // herdr API 결과(agents(), panes(), spaces(), terminals(), layout())를 인자로 받는다.
 
 export function find(node, id) {

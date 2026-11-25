@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   sidebarNarrow, place, rowHeight, where, base, glyph, tone, avatarFill, avatarInitial, assignColors, nestWorktrees,
   planMoves, remoteNames, rebuilt, repoName, parseCounts, gitInfo, gitTailParts, MARK, PALETTE,
-} from "../mods/my-spaces/logic.js";
+} from "../mods/hee-space-list/logic.js";
 
 const sp = (o = {}) => ({ id: "s1", index: 0, name: "herdr", named: false, folder: "/home/x", machine: null, branch: null, active: false, status: null, tabs: [{ id: "tb1" }], ...o });
 

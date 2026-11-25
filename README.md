@@ -6,10 +6,10 @@ Herdr용 개인 커스텀(mod, 레이아웃, 두 번째 창 실행 스크립트,
 
 | 경로 | 설명 |
 | --- | --- |
-| `mods/my-agents` | 에이전트를 그룹/우선순위 뷰로 보여 주는 사이드바. 하위 에이전트 중 가장 급한 상태가 부모 자리를 차지합니다. (herdr `agents` 복제) |
-| `mods/my-changes` | Git 변경 파일 목록과 diff 패널. 다중 선택과 discard 요청을 처리합니다. (herdr `changes` 복제) |
+| `mods/hee-agent-list` | 에이전트를 그룹/우선순위 뷰로 보여 주는 사이드바. 하위 에이전트 중 가장 급한 상태가 부모 자리를 차지합니다. (herdr `agents` 복제) |
+| `mods/git-changes` | Git 변경 파일 목록과 diff 패널. 다중 선택과 discard 요청을 처리합니다. (herdr `changes` 복제) |
 | `mods/my-changes-menu` | Changes 행의 우클릭 메뉴와 Discard 확인 창. |
-| `mods/my-spaces` | space 목록. 고정 색 아바타, worktree 묶음, 머신별 그룹, 브랜치·ahead/behind 표시. (herdr `spaces` 복제) |
+| `mods/hee-space-list` | space 목록. 고정 색 아바타, worktree 묶음, 머신별 그룹, 브랜치·ahead/behind 표시. (herdr `spaces` 복제) |
 | `mods/tabs-graph` | 탭 바. 에이전트 터미널 제목 추적과 윈도우 버튼을 포함합니다. (herdr `tabs` 복제) |
 | `mods/branch-switch` | VS Code "Checkout to..."와 같은 브랜치/태그 전환 퀵 픽. 로컬 ref만 사용합니다. |
 | `mods/git-graph-branch` | Git 그래프 패널. 브랜치 다중 선택과 "Show only this branch"를 추가한 복제본(아래 서드파티 고지 참고). |
@@ -95,5 +95,5 @@ sh extensions/notify-helper/build.sh [out_dir]   # 기본 build/
 
 이 저장소에서 새로 작성한 코드는 MIT(`LICENSE`)입니다. 예외는 다음과 같습니다.
 
-- `mods/my-agents`, `mods/my-changes`, `mods/my-spaces`, `mods/tabs-graph`: Herdr 내장 mod를 수정한 파생물이라 Apache License 2.0을 따릅니다(`LICENSES/Apache-2.0-Herdr.txt`).
+- `mods/hee-agent-list`, `mods/git-changes`, `mods/hee-space-list`, `mods/tabs-graph`: Herdr 내장 mod를 수정한 파생물이라 Apache License 2.0을 따릅니다(`LICENSES/Apache-2.0-Herdr.txt`).
 - `mods/git-graph-branch`: 원본의 MIT 라이선스(`mods/git-graph-branch/LICENSE`)를 따릅니다.

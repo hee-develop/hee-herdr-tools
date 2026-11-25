@@ -1,6 +1,6 @@
 herdr-tools - third-party notices
 
-1. mods/my-agents, mods/my-changes, mods/my-spaces, mods/tabs-graph
+1. mods/hee-agent-list, mods/git-changes, mods/hee-space-list, mods/tabs-graph
    Derived from mods bundled with Herdr (agents, changes, spaces, tabs;
    Herdr 0.1.14-0.1.15), licensed under the Apache License, Version 2.0.
    A copy of that license: LICENSES/Apache-2.0-Herdr.txt
@@ -9,7 +9,7 @@ herdr-tools - third-party notices
    grouping in Spaces, live terminal titles in the tab bar, and moving pure
    logic into logic.js for testing. These derived files remain under the
    Apache License 2.0.
-   mods/my-changes-menu is new code written for my-changes.
+   mods/my-changes-menu is new code written for git-changes.
 
 2. mods/git-graph-branch
    Copied and modified from rabeeh-ta/herdr-git-graph (MIT License)

@@ -29,7 +29,7 @@
               "id": "spaces",
               "type": "block",
               "content": {
-                "mod": "my-spaces"
+                "mod": "hee-space-list"
               },
               "size": {
                 "weight": 1
@@ -40,7 +40,7 @@
               "id": "agents",
               "type": "block",
               "content": {
-                "mod": "my-agents"
+                "mod": "hee-agent-list"
               },
               "size": {
                 "weight": 1
@@ -149,7 +149,7 @@
                       "id": "changes",
                       "type": "block",
                       "content": {
-                        "mod": "my-changes"
+                        "mod": "git-changes"
                       }
                     },
                     {

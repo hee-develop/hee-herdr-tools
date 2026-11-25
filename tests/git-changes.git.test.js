@@ -1,4 +1,4 @@
-// Runs the discard args my-changes decides (logic.js) against real throwaway repos, with
+// Runs the discard args git-changes decides (logic.js) against real throwaway repos, with
 // `git --literal-pathspecs` as main.js does, and checks only the intended file changes.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -6,7 +6,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { parseChanges, discardArgs } from "../mods/my-changes/logic.js";
+import { parseChanges, discardArgs } from "../mods/git-changes/logic.js";
 
 const env = { ...process.env, GIT_AUTHOR_NAME: "T", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "T", GIT_COMMITTER_EMAIL: "t@t", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null" };
 const git = (cwd, args) => { const r = spawnSync("git", args, { cwd, env, encoding: "utf8" }); return { code: r.status, stdout: r.stdout, stderr: r.stderr }; };
@@ -14,7 +14,7 @@ const sh = (cwd, ...args) => { const r = git(cwd, args); assert.equal(r.code, 0,
 
 const dirs = [];
 async function repo({ commit = true } = {}) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "my-changes-git-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "git-changes-git-"));
   dirs.push(dir);
   sh(dir, "init", "-q", "-b", "main");
   if (commit) {

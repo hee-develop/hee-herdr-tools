@@ -2,8 +2,8 @@
 // Popup props { mode: "menu", items: [{ path, status, fresh }] } -> "Discard" / "Discard N files".
 // Dialog props { mode: "confirm", items } -> Cancel / Discard, with the file list.
 // (The old single-file props { path, status, fresh } still work.)
-// Nothing runs here: confirming sets shared("my-changes.discard", { nonce, items }), and
-// my-changes (which knows the repo root and machine) runs git.
+// Nothing runs here: confirming sets shared("git-changes.discard", { nonce, items }), and
+// git-changes (which knows the repo root and machine) runs git.
 
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
@@ -28,7 +28,7 @@ export default class ChangesMenu extends View {
   confirm() {
     const items = itemsOf(props());
     this.close();
-    if (items.length) setShared("my-changes.discard", { nonce: Date.now() + Math.random(), items });
+    if (items.length) setShared("git-changes.discard", { nonce: Date.now() + Math.random(), items });
   }
 
   render(cx) {
@@ -53,7 +53,7 @@ export default class ChangesMenu extends View {
       }
       const button = (id, label, bg, fg, onClick) =>
         h_flex().id(id).h(32).px(14).items_center().rounded(8).border_1().border_color(id === "no" ? t.input : bg).bg(bg).text_color(fg).cursor_pointer().hover((s) => s.opacity(0.88)).on_click(onClick).child(label);
-      return v_flex().id("my-changes-confirm").track_focus(this.handle).on_key_down(onKey(() => (conflict ? this.close() : this.confirm())))
+      return v_flex().id("git-changes-confirm").track_focus(this.handle).on_key_down(onKey(() => (conflict ? this.close() : this.confirm())))
         .size_full().min_h(0).p(18).gap(12).rounded(8).bg(t.popover).text_size(13)
         .child(h_flex().items_center().child(div().flex_1().text_size(15).font_semibold().text_color(t.foreground).child(m.title)).child(div().text_size(11).text_color(t.dim).child("Esc")))
         .child(div().flex_1().min_h(0).overflow_y_scrollbar().text_color(t.muted).child(detail))

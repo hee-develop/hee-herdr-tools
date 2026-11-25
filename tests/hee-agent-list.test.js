@@ -4,7 +4,7 @@ import {
   find, sidebarNarrow, clean, leadPanes, title, kidStatus, duration, trackChanges, nextHeld, rankOf,
   buildTree, nestedAddresses, countByTab, urgencyMap, sortByPriority, topStatus, computeLabels,
   machineOf, rowName, groupAgents, pendingPinsAfter, RANK,
-} from "../mods/my-agents/logic.js";
+} from "../mods/hee-agent-list/logic.js";
 
 const prog = (o = {}) => ({ key: "claude", name: "Claude Code", icon: null, tint: false, tile: null, color: null, shell: false, agent: true, ...o });
 const agent = (o = {}) => ({ address: "t1", pane: "p1", space: "s1", space_name: "sp", tab: "tb1", tab_index: 0, tab_name: "1", status: "idle", app: null, program: prog(), title: "", seq: 1, pinned: false, focused: false, ...o });
